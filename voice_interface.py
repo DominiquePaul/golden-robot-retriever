@@ -11,6 +11,11 @@ import webrtcvad
 
 import os
 
+# setup key with
+# echo "export OPENAI_API_KEY='yourkey'" >> ~/.zshrc
+# source ~/.zshrc
+# test that it worked with
+# echo $OPENAI_API_KEY
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 
@@ -113,6 +118,32 @@ def speech_to_text_until_silence():
             )
 
             print(transcription)
+            return transcription
+
+
+def text_to_goal_object(text):
+    client = openai.OpenAI()
+
+    response = client.responses.create(
+        model="gpt-4.1",
+        instructions="You are an assistant that condenses user input to single objects. From the user, you get a sentence of what he desires. You answer in a single word (or multiple if the object the user wants is e.g. a coca cola can), which is the object that the user wants. Example: If the user says, 'I want chips', your answer is 'chips'. Your only answer is a single object.",
+        input=text,
+    )
+
+    print(response.output_text)
+    return response.output_text
+
+
+def extract_what_the_user_wants_from_voice():
+    user_text = speech_to_text_until_silence()
+    user_object = text_to_goal_object(user_text)
+    print(f"The user wants: {user_object}")
+
+    return user_object
+
+
+def check_if_user_object_is_visible_in_image(user_object, img):
+    pass
 
 
 if __name__ == "__main__":
@@ -120,4 +151,6 @@ if __name__ == "__main__":
     # text_to_speech(input_text)
 
     # speech_to_text()
-    speech_to_text_until_silence()
+    # speech_to_text_until_silence()
+
+    extract_what_the_user_wants_from_voice()
