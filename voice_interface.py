@@ -1,5 +1,6 @@
 from pathlib import Path
 import openai
+import base64
 
 from scipy.io.wavfile import write
 import numpy as np
@@ -10,6 +11,8 @@ import sounddevice as sd
 import tempfile
 import collections
 import webrtcvad
+
+import cv2
 
 import os
 
@@ -39,20 +42,26 @@ def text_to_speech(input_text, mood=GoldenRetrieverMood.CHEERFUL):
     client = openai.OpenAI()
     speech_file_path = Path(__file__).parent / f"robot_answers/{timestamp}_speech.mp3"
 
+    base_prompt = "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence."
+
     if mood == GoldenRetrieverMood.CHEERFUL:
-        speech_instructions = "Speak in a cheerful and happy tone."
+        speech_instructions = base_prompt + "Speak in a cheerful and happy tone."
     elif mood == GoldenRetrieverMood.ANGRY:
-        speech_instructions = "Speak in an angry and annoyed tone."
+        speech_instructions = base_prompt + "Speak in an angry and annoyed tone."
     elif mood == GoldenRetrieverMood.NICE:
-        speech_instructions = "Speak in a nice and friendly tone."
+        speech_instructions = base_prompt + "Speak in a nice and friendly tone."
     elif mood == GoldenRetrieverMood.SASSY:
-        speech_instructions = "Speak in a sassy and somewhat annoyed tone."
+        speech_instructions = (
+            base_prompt + "Speak in a sassy and somewhat annoyed tone."
+        )
     elif mood == GoldenRetrieverMood.SARCASTIC:
-        speech_instructions = "Speak in a sarcastic and somewhat pissed off tone."
+        speech_instructions = (
+            base_prompt + "Speak in a sarcastic and somewhat pissed off tone."
+        )
 
     with client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
-        voice="coral",
+        voice="verse",
         input=input_text,
         instructions=speech_instructions,
     ) as response:
@@ -165,16 +174,40 @@ def extract_what_the_user_wants_from_voice():
     user_object = text_to_goal_object(user_text)
     print(f"The user wants: {user_object}")
 
-    return user_object
+    return user_text, user_object
 
 
 def check_if_user_object_is_visible_in_image(user_object, img):
-    pass
+    # Getting the Base64 string
+    retval, buffer = cv2.imencode(".jpg", img)
+    base64_image = base64.b64encode(buffer).decode("utf-8")
+
+    client = openai.OpenAI()
+    response = client.responses.create(
+        model="gpt-4.1",
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"Is the object {user_object} in the image?",
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{base64_image}",
+                    },
+                ],
+            }
+        ],
+    )
+
+    print(response.output_text)
 
 
 if __name__ == "__main__":
-    input_text = "Please hurry up, I do not have time forever!"
-    speech_path = text_to_speech(input_text)
+    input_text = "Please hurry up, I do not have time forever! This is now the 4th item we are looking at, and you are still unhappy."
+    speech_path = text_to_speech(input_text, GoldenRetrieverMood.SARCASTIC)
     os.system(
         f"mpg123 {speech_path}"
     )  # uses mpg123 to play mp3 (ensure it's installed)
@@ -182,4 +215,4 @@ if __name__ == "__main__":
     # speech_to_text()
     # speech_to_text_until_silence()
 
-    # extract_what_the_user_wants_from_voice()
+    # user_command, user_object = extract_what_the_user_wants_from_voice()
