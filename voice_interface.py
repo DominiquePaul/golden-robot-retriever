@@ -18,10 +18,10 @@ import os
 
 import datetime
 
-# setup key with
-# echo "export OPENAI_API_KEY='yourkey'" >> ~/.zshrc
-# source ~/.zshrc
-# test that it worked with
+## setup key with
+# echo "export OPENAI_API_KEY='yourkey'" >> ~/.bashrc
+# source ~/.bashrc
+## test that it worked with
 # echo $OPENAI_API_KEY
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
