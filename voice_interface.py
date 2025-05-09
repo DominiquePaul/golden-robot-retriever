@@ -4,12 +4,16 @@ import openai
 from scipy.io.wavfile import write
 import numpy as np
 
+from enum import Enum
+
 import sounddevice as sd
 import tempfile
 import collections
 import webrtcvad
 
 import os
+
+import datetime
 
 # setup key with
 # echo "export OPENAI_API_KEY='yourkey'" >> ~/.zshrc
@@ -19,12 +23,32 @@ import os
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 
-def text_to_speech(input_text):
-    client = openai.OpenAI()
-    speech_file_path = Path(__file__).parent / "speech.mp3"
+class GoldenRetrieverMood(Enum):
+    """How the robodog is feeling atm."""
 
-    # TODO: make this a golde retriever voice
-    speech_instructions = "Speak in a cheerful and positive tone."
+    ANGRY = 0
+    NICE = 1
+    CHEERFUL = 2
+    SASSY = 3
+    SARCASTIC = 4
+
+
+def text_to_speech(input_text, mood=GoldenRetrieverMood.CHEERFUL):
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    client = openai.OpenAI()
+    speech_file_path = Path(__file__).parent / f"robot_answers/{timestamp}_speech.mp3"
+
+    if mood == GoldenRetrieverMood.CHEERFUL:
+        speech_instructions = "Speak in a cheerful and happy tone."
+    elif mood == GoldenRetrieverMood.ANGRY:
+        speech_instructions = "Speak in an angry and annoyed tone."
+    elif mood == GoldenRetrieverMood.NICE:
+        speech_instructions = "Speak in a nice and friendly tone."
+    elif mood == GoldenRetrieverMood.SASSY:
+        speech_instructions = "Speak in a sassy and somewhat annoyed tone."
+    elif mood == GoldenRetrieverMood.SARCASTIC:
+        speech_instructions = "Speak in a sarcastic and somewhat pissed off tone."
 
     with client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
@@ -33,6 +57,8 @@ def text_to_speech(input_text):
         instructions=speech_instructions,
     ) as response:
         response.stream_to_file(speech_file_path)
+
+    return speech_file_path
 
 
 def speech_to_text():
@@ -147,10 +173,13 @@ def check_if_user_object_is_visible_in_image(user_object, img):
 
 
 if __name__ == "__main__":
-    # input_text = "Today is a wonderful day to build something people love!"
-    # text_to_speech(input_text)
+    input_text = "Please hurry up, I do not have time forever!"
+    speech_path = text_to_speech(input_text)
+    os.system(
+        f"mpg123 {speech_path}"
+    )  # uses mpg123 to play mp3 (ensure it's installed)
 
     # speech_to_text()
     # speech_to_text_until_silence()
 
-    extract_what_the_user_wants_from_voice()
+    # extract_what_the_user_wants_from_voice()
