@@ -33,7 +33,7 @@ def convert_text_to_personality(client, text, context):
     )
     base_prompt += str(context)
 
-    prompt = f"Please rephrase the question {text} to better fit with your personality. Only answer with the rephrased question. If you helped with something before, you can also ask something like 'Do you need help with anything else at the moment'"
+    prompt = f"Please rephrase the question {text} to better fit with your personality. Only answer with the rephrased question."
 
     # client = openai.OpenAI()
     response = client.responses.create(

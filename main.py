@@ -27,16 +27,56 @@ frame_lock = threading.Lock()
 def dummy_extract_what_the_user_wants_from_voice():
     return "Please bring me a can to drink", "can"
 
+class CameraWrapperBase:
+    def __init__(self):
+        self.camera = None
 
-def display_frames(pipeline, stop_event):
+    def get_frame(self):
+        pass
+    
+class WebcamCamera:
+    def __init__(
+        self,
+        camera_id=None,
+    ):
+        self.cap = cv2.VideoCapture(camera_id)
+
+    def get_frame(self):
+        # frames = self.pipeline.wait_for_frames()
+        ret, frame = self.cap.read()
+        if ret:
+            return frame
+
+        return None
+
+class RealSenseCamera:
+    def __init__(self):
+      self.pipeline = rs.pipeline()
+      config = rs.config()
+
+      config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+
+      # Start streaming
+      profile = self.pipeline.start(config)
+      sensor = self.pipeline.get_active_profile().get_device().query_sensors()[0]
+      sensor.set_option(rs.option.exposure, 50000.000)
+
+    def get_frame(self):
+        frames = self.pipeline.wait_for_frames()
+        # frames = self.pipeline.poll_for_frames()
+        if frames:
+            color_frame = frames.get_color_frame()
+            frame = np.asanyarray(color_frame.get_data())
+
+            return frame
+
+        return None
+
+def display_frames(camera, stop_event):
     global latest_frame
     global space_pressed
     while not stop_event.is_set():
-        frames = pipeline.wait_for_frames()
-        color_frame = frames.get_color_frame()
-        if not color_frame:
-            continue
-        frame = np.asanyarray(color_frame.get_data())
+        frame = camera.get_frame()
 
         with frame_lock:
             latest_frame = frame.copy()
@@ -51,9 +91,7 @@ def display_frames(pipeline, stop_event):
         time.sleep(0.05)
 
 
-def ask_what_the_user_wants(client, context):
-    text = "How can I help you?"
-
+def text_to_personality_speech(client, text, context):
     new_text = convert_text_to_personality(client, text, context)
 
     speech_path = text_to_speech(
@@ -64,33 +102,39 @@ def ask_what_the_user_wants(client, context):
     return new_text
 
 
+def ask_what_the_user_wants(client, context):
+    text = "How can I help you?"
+    return text_to_personality_speech(client, text, context)
+
+
 def ask_if_this_is_what_we_want(client, context):
-    question_text = "Is this what you want?"
-    new_text = convert_text_to_personality(client, question_text, context)
+    text = "This fits the description, is this what you want?"
+    return text_to_personality_speech(client, text, context)
 
-    speech_path = text_to_speech(
-        client, new_text, context, GoldenRetrieverMood.SARCASTIC
-    )
-    os.system(f"mpg123 {speech_path}")
 
-    return new_text
+def we_grabbed_stuff(client, context):
+    text = "Ok, we grasped the object, bringing it to you now."
+    return text_to_personality_speech(client, text, context)
+
+
+def tell_that_we_cant_see_obj_yet(client, context, obj):
+    text = f"We did not yet find {obj}, we'll keep looking."
+    return text_to_personality_speech(client, text, context)
 
 
 def should_try_again(client, context):
-    question_text = "Should we try this again?"
-    new_text = convert_text_to_personality(client, question_text, context)
-
-    speech_path = text_to_speech(
-        client, new_text, context, GoldenRetrieverMood.SARCASTIC
-    )
-    os.system(f"mpg123 {speech_path}")
-
-    return new_text
+    text = "Should we try this again?"
+    return text_to_personality_speech(client, text, context)
 
 
 def run_policy():
     print("Attempting to execute policy")
     return True
+
+
+def run_dropping_policy():
+    print("Run dropping policy")
+    pass
 
 
 def main():
@@ -107,20 +151,13 @@ def main():
     last_asking_time = 0
     asking_delta_in_s = 5
 
-    pipeline = rs.pipeline()
-    config = rs.config()
-
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-
-    # Start streaming
-    profile = pipeline.start(config)
-    sensor = pipeline.get_active_profile().get_device().query_sensors()[0]
-    sensor.set_option(rs.option.exposure, 10000.000)
+    camera = RealSenseCamera()
+    # camera = WebcamCamera(0)
 
     # Start display thread
     stop_event = threading.Event()
     display_thread = threading.Thread(
-        target=display_frames, args=(pipeline, stop_event), daemon=True
+        target=display_frames, args=(camera, stop_event), daemon=True
     )
     display_thread.start()
 
@@ -177,8 +214,13 @@ def main():
 
                     print(obj_visible)
 
+                    if not obj_visible:
+                        tell_that_we_cant_see_obj_yet(
+                            client, complete_context, user_desire
+                        )
+
                     # ask if we should bring this one
-                    if obj_visible:
+                    else:
                         question = ask_if_this_is_what_we_want(client, complete_context)
                         complete_context.append(
                             {"role": "assistant", "content": question}
@@ -232,6 +274,39 @@ def main():
                                             }
                                         )
                                         break
+
+                            # tell user that we grasped the obj
+                            text = we_grabbed_stuff(client, complete_context)
+                            complete_context.append(
+                                {
+                                    "role": "assistant",
+                                    "content": text,
+                                }
+                            )
+
+                            should_drop = False
+                            # drop the stuff when back at the persons place
+                            while not should_drop:
+                                # check if a hand is visible in the camera
+                                with frame_lock:
+                                    frame_copy = (
+                                        latest_frame.copy()
+                                        if latest_frame is not None
+                                        else None
+                                    )
+
+                                downscaled = cv2.resize(
+                                    frame_copy, (0, 0), fx=0.5, fy=0.5
+                                )
+                                # cv2.imshow("Scaled", downscaled)
+                                # cv2.waitKey(1)
+
+                                should_drop = check_if_user_object_is_visible_in_image(
+                                    client, "open hand", downscaled
+                                )
+                                time.sleep(4)
+
+                            run_dropping_policy()
 
         # other things
         time.sleep(0.05)
