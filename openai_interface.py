@@ -22,14 +22,6 @@ import urllib3
 
 import datetime
 
-## setup key with
-# echo "export OPENAI_API_KEY='yourkey'" >> ~/.bashrc
-# source ~/.bashrc
-## test that it worked with
-# echo $OPENAI_API_KEY
-openai.api_key = os.environ["OPENAI_API_KEY"]
-
-
 class GoldenRetrieverMood(Enum):
     """How the robodog is feeling atm."""
 
@@ -40,7 +32,7 @@ class GoldenRetrieverMood(Enum):
     SARCASTIC = 4
 
 
-def convert_text_to_personality(text, context):
+def convert_text_to_personality(client, text, context):
 
     base_prompt = (
         "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
@@ -50,9 +42,10 @@ def convert_text_to_personality(text, context):
 
     prompt = f"Please rephrase the question {text} to better fit with your personality. Only answer with the rephrased question. If you helped with something before, you can also ask something like 'Do you need help with anything else at the moment'"
 
-    client = openai.OpenAI()
+    # client = openai.OpenAI()
     response = client.responses.create(
-        model="gpt-4.1",
+        # model="gpt-4.1",
+        model="gpt-4.1-nano",
         instructions=prompt,
         input=text,
     )
@@ -61,10 +54,10 @@ def convert_text_to_personality(text, context):
     return response.output_text
 
 
-def text_to_speech(input_text, prev_conversation=[], mood=GoldenRetrieverMood.CHEERFUL):
+def text_to_speech(client, input_text, prev_conversation=[], mood=GoldenRetrieverMood.CHEERFUL):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    client = openai.OpenAI()
+    # client = openai.OpenAI()
     speech_file_path = Path(__file__).parent / f"robot_answers/{timestamp}_speech.mp3"
 
     base_prompt = (
@@ -104,8 +97,8 @@ def text_to_speech(input_text, prev_conversation=[], mood=GoldenRetrieverMood.CH
     return speech_file_path
 
 
-def speech_to_text():
-    client = openai.OpenAI()
+def speech_to_text(client):
+    # client = openai.OpenAI()
 
     # Record audio from mic
     duration = 5  # seconds
@@ -131,7 +124,7 @@ def speech_to_text():
             print(transcription)
 
 
-def speech_to_text_until_silence():
+def speech_to_text_until_silence(client):
     # Settings
     samplerate = 16000
     frame_duration_ms = 30  # ms
@@ -176,7 +169,7 @@ def speech_to_text_until_silence():
     if len(speech_frames) < 2:
         return None
 
-    client = openai.OpenAI()
+    # client = openai.OpenAI()
 
     # Save to temp file
     with tempfile.NamedTemporaryFile(suffix=".wav") as tmpfile:
@@ -193,11 +186,12 @@ def speech_to_text_until_silence():
             return transcription
 
 
-def text_to_goal_object_or_none(text):
-    client = openai.OpenAI()
+def text_to_goal_object_or_none(client, text):
+    # client = openai.OpenAI()
 
     response = client.responses.create(
-        model="gpt-4.1",
+        # model="gpt-4.1",
+        model="gpt-4.1-nano",
         instructions="You are an assistant that condenses user input to single objects. From the user, you get a sentence of what he desires. You answer in a single word (or multiple if the object the user wants is e.g. a coca cola can), which is the object that the user wants. Example: If the user says, 'I want chips', your answer is 'chips'. Your only answer is a single object. It is also possible that there is noting that the user wants at this moment, then return None.",
         input=text,
     )
@@ -210,14 +204,14 @@ def text_to_goal_object_or_none(text):
     return response.output_text
 
 
-def extract_what_the_user_wants_from_voice():
-    user_text = speech_to_text_until_silence()
+def extract_what_the_user_wants_from_voice(client):
+    user_text = speech_to_text_until_silence(client)
     
     if user_text is None:
         print ("Did not record anything")
         return None, None
 
-    user_object = text_to_goal_object_or_none(user_text)
+    user_object = text_to_goal_object_or_none(client, user_text)
 
     print(f"The user wants: {user_object}")
 
@@ -227,11 +221,12 @@ def extract_what_the_user_wants_from_voice():
     return user_text, user_object
 
 
-def text_to_yes_no(question, answer):
-    client = openai.OpenAI()
+def text_to_yes_no(client, question, answer):
+    # client = openai.OpenAI()
 
     response = client.responses.create(
-        model="gpt-4.1",
+        # model="gpt-4.1",
+        model="gpt-4.1-nano",
         instructions=f"You are an assistant that condenses user input to a single/yes no answer. The question we asked was {question}",
         input=f"The answer the user gave to the question was {answer}",
     )
@@ -244,18 +239,18 @@ def text_to_yes_no(question, answer):
     return response.output_text, False
 
 
-def record_and_extract_bool(question_we_asked):
-    user_text = speech_to_text_until_silence()
+def record_and_extract_bool(client, question_we_asked):
+    user_text = speech_to_text_until_silence(client)
     if user_text is None:
         return None, None
     
-    test, res = text_to_yes_no(question_we_asked, user_text)
+    test, res = text_to_yes_no(client, question_we_asked, user_text)
     print(res)
 
     return user_text, res
 
 
-def check_if_user_object_is_visible_in_image(user_object, img):
+def check_if_user_object_is_visible_in_image(client, user_object, img):
     # Getting the Base64 string
     # retval, buffer = cv2.imencode(".jpg", img)
     # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale (8-bit)
@@ -274,10 +269,11 @@ def check_if_user_object_is_visible_in_image(user_object, img):
     with open(f"imgs/image_{timestamp}.txt", "w") as f:
         f.write(base64_image)
 
-    client = openai.OpenAI()
+    # client = openai.OpenAI()
     response = client.responses.create(
         # model="o4-mini",
         model="gpt-4.1",
+        # model="gpt-4.1-nano",
         input=[
             {
                 "role": "user",
