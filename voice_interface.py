@@ -106,9 +106,9 @@ def speech_to_text_until_silence():
     samplerate = 16000
     frame_duration_ms = 30  # ms
     frame_size = int(samplerate * frame_duration_ms / 1000)
-    vad = webrtcvad.Vad(1)  # 0–3, more = more aggressive
+    vad = webrtcvad.Vad(3)  # 0–3, more = more aggressive
 
-    ring_buffer = collections.deque(maxlen=10)
+    ring_buffer = collections.deque(maxlen=5)
     speech_frames = []
 
     def record_until_silence():
@@ -126,7 +126,7 @@ def speech_to_text_until_silence():
                 if not triggered:
                     ring_buffer.append((pcm, is_speech))
                     num_voiced = len([f for f, speech in ring_buffer if speech])
-                    if num_voiced > 0.8 * ring_buffer.maxlen:
+                    if num_voiced > 0.5 * ring_buffer.maxlen:
                         triggered = True
                         speech_frames.extend([f for f, _ in ring_buffer])
                         ring_buffer.clear()
@@ -134,7 +134,7 @@ def speech_to_text_until_silence():
                     speech_frames.append(pcm)
                     ring_buffer.append((pcm, is_speech))
                     num_unvoiced = len([f for f, speech in ring_buffer if not speech])
-                    if num_unvoiced > 0.8 * ring_buffer.maxlen:
+                    if num_unvoiced > 0.5 * ring_buffer.maxlen:
                         break
         finally:
             stream.stop()
@@ -181,13 +181,49 @@ def extract_what_the_user_wants_from_voice():
     return user_text, user_object
 
 
+def text_to_yes_no(question, answer):
+    client = openai.OpenAI()
+
+    response = client.responses.create(
+        model="gpt-4.1",
+        instructions=f"You are an assistant that condenses user input to a single/yes no answer. The question we asked was {question}",
+        input=f"The answer the user gave to the question was {answer}",
+    )
+
+    print(response.output_text)
+
+    if "yes" in response.output_text or "Yes" in response.output_text:
+        return response.output_text, True
+
+    return response.output_text, False
+
+
+def record_and_extract_bool(question_we_asked):
+    user_text = speech_to_text_until_silence()
+    test, res = text_to_yes_no(question_we_asked, user_text)
+    print(res)
+
+    return user_text, res
+
+
 def check_if_user_object_is_visible_in_image(user_object, img):
     # Getting the Base64 string
     # retval, buffer = cv2.imencode(".jpg", img)
-    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale (8-bit)
-    retval, buffer = cv2.imencode(".jpg", img_gray, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale (8-bit)
+    retval, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
 
     base64_image = base64.b64encode(buffer).decode("utf-8")
+
+    # Generate timestamped filename
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Save binary JPEG
+    with open(f"imgs/image_{timestamp}.jpg", "wb") as f:
+        f.write(buffer)
+
+    # Write to file
+    with open(f"imgs/image_{timestamp}.txt", "w") as f:
+        f.write(base64_image)
 
     client = openai.OpenAI()
     response = client.responses.create(
@@ -212,7 +248,7 @@ def check_if_user_object_is_visible_in_image(user_object, img):
 
     print(response.output_text)
 
-    if "yes" in response.output_text:
+    if "yes" in response.output_text or "Yes" in response.output_text:
         return True
 
     return False
