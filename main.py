@@ -20,7 +20,7 @@ from golden_robot_retriever.openai_interface import (
     check_if_user_object_is_visible_in_image,
 )
 from golden_robot_retriever.cameras import get_camera
-from golden_robot_retriever.robot_code import run_policy
+from golden_robot_retriever.robot_code import GraspingPolicy
 
 space_pressed = False
 
@@ -123,6 +123,8 @@ class GoldenRetriever:
         self.img_check_delta_in_s = 0.5
         self.last_asking_time = 0
         self.asking_delta_in_s = 5
+
+        self.policy = GraspingPolicy()
 
         try:
             self.camera = get_camera("webcam")
@@ -277,7 +279,7 @@ class GoldenRetriever:
                                     if DEBUG:
                                         success = mock_run_policy(max_runtime_s=15)
                                     else:
-                                        success = run_policy(max_runtime_s=15)
+                                        success = self.policy.run(max_runtime_s=15)
 
                                     if success:
                                         self.user_desire = None
