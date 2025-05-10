@@ -20,17 +20,10 @@ class GraspingPolicy:
         start_time = time.time()
 
         while True:
-            # Capture multi-camera frames (adjust camera IDs and size as needed)
-            # images = [
-            #     self.allcameras.get_rgb_frame(0, resize=(240, 320)),
-            #     self.allcameras.get_rgb_frame(1, resize=(240, 320)),
-            # ]
-
             # Get current robot state
             state = httpx.post(f"{self.PHOSPHOBOT_API_URL}/joints/read").json()
 
             # Generate actions
-            start = time.time()
             actions = self.model(
                 {
                     "observation.state": np.array(state["angles_rad"]),
@@ -42,9 +35,6 @@ class GraspingPolicy:
                     ),
                 },
             )
-            end = time.time()
-            # print(f"Time taken for inference: {end - start:.4f} seconds")
-            # actions = actions * 3
 
             # Execute actions at 30Hz
             for action in actions:
@@ -54,7 +44,7 @@ class GraspingPolicy:
                 )
                 time.sleep(1 / 30)
 
-            if start_time - time.time() > max_runtime_s:
+            if time.time() - start_time > max_runtime_s:
                 break
 
         return True
