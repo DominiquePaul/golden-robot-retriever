@@ -187,23 +187,32 @@ def speech_to_text_until_silence():
             return transcription
 
 
-def text_to_goal_object(text):
+def text_to_goal_object_or_none(text):
     client = openai.OpenAI()
 
     response = client.responses.create(
         model="gpt-4.1",
-        instructions="You are an assistant that condenses user input to single objects. From the user, you get a sentence of what he desires. You answer in a single word (or multiple if the object the user wants is e.g. a coca cola can), which is the object that the user wants. Example: If the user says, 'I want chips', your answer is 'chips'. Your only answer is a single object.",
+        instructions="You are an assistant that condenses user input to single objects. From the user, you get a sentence of what he desires. You answer in a single word (or multiple if the object the user wants is e.g. a coca cola can), which is the object that the user wants. Example: If the user says, 'I want chips', your answer is 'chips'. Your only answer is a single object. It is also possible that there is noting that the user wants at this moment, then return None.",
         input=text,
     )
 
     print(response.output_text)
+
+    if "none" in response.output_text.lower():
+        return None
+    
     return response.output_text
 
 
 def extract_what_the_user_wants_from_voice():
     user_text = speech_to_text_until_silence()
-    user_object = text_to_goal_object(user_text)
+    user_object = text_to_goal_object_or_none(user_text)
+
     print(f"The user wants: {user_object}")
+
+    if user_object is None:
+        return user_text, None
+
 
     return user_text, user_object
 

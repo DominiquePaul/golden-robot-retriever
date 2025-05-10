@@ -23,9 +23,9 @@ def dummy_extract_what_the_user_wants_from_voice():
     return "Please bring me a can to drink", "can"
 
 
-def display_frames(pipeline):
+def display_frames(pipeline, stop_event):
     global latest_frame
-    while True:
+    while not stop_event.is_set():
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
         if not color_frame:
@@ -96,8 +96,9 @@ def main():
     sensor.set_option(rs.option.exposure, 10000.000)
 
     # Start display thread
+    stop_event = threading.Event()
     display_thread = threading.Thread(
-        target=display_frames, args=(pipeline,), daemon=True
+        target=display_frames, args=(pipeline, stop_event), daemon=True
     )
     display_thread.start()
 
@@ -118,6 +119,10 @@ def main():
             space_pressed = False
             # user_speech, user_desire = dummy_extract_what_the_user_wants_from_voice()
             user_speech, user_desire = extract_what_the_user_wants_from_voice()
+
+            if user_desire is None:
+                break
+
             art = text2art(user_desire)
             lines = art.splitlines()
             # clear_previous_output(previous_lines)
@@ -161,9 +166,13 @@ def main():
 
                             if success:
                                 user_desire = None
+                                complete_context += "We successfully solved this problem. On to the next one!"
 
         # other things
         time.sleep(0.05)
+
+    stop_event.set()
+    display_thread.join()
 
 
 if __name__ == "__main__":
