@@ -30,16 +30,56 @@ frame_lock = threading.Lock()
 def dummy_extract_what_the_user_wants_from_voice():
     return "Please bring me a can to drink", "can"
 
+class CameraWrapperBase:
+    def __init__(self):
+        self.camera = None
 
-def display_frames(pipeline, stop_event):
+    def get_frame(self):
+        pass
+    
+class WebcamCamera:
+    def __init__(
+        self,
+        camera_id=None,
+    ):
+        self.cap = cv2.VideoCapture(camera_id)
+
+    def get_frame(self):
+        # frames = self.pipeline.wait_for_frames()
+        ret, frame = self.cap.read()
+        if ret:
+            return frame
+
+        return None
+
+class RealSenseCamera:
+    def __init__(self):
+      self.pipeline = rs.pipeline()
+      config = rs.config()
+
+      config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+
+      # Start streaming
+      profile = self.pipeline.start(config)
+      sensor = self.pipeline.get_active_profile().get_device().query_sensors()[0]
+      sensor.set_option(rs.option.exposure, 50000.000)
+
+    def get_frame(self):
+        frames = self.pipeline.wait_for_frames()
+        # frames = self.pipeline.poll_for_frames()
+        if frames:
+            color_frame = frames.get_color_frame()
+            frame = np.asanyarray(color_frame.get_data())
+
+            return frame
+
+        return None
+
+def display_frames(camera, stop_event):
     global latest_frame
     global space_pressed
     while not stop_event.is_set():
-        frames = pipeline.wait_for_frames()
-        color_frame = frames.get_color_frame()
-        if not color_frame:
-            continue
-        frame = np.asanyarray(color_frame.get_data())
+        frame = camera.get_frame()
 
         with frame_lock:
             latest_frame = frame.copy()
@@ -114,20 +154,13 @@ def main():
     last_asking_time = 0
     asking_delta_in_s = 5
 
-    pipeline = rs.pipeline()
-    config = rs.config()
-
-    config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-
-    # Start streaming
-    profile = pipeline.start(config)
-    sensor = pipeline.get_active_profile().get_device().query_sensors()[0]
-    sensor.set_option(rs.option.exposure, 10000.000)
+    camera = RealSenseCamera()
+    # camera = WebcamCamera(0)
 
     # Start display thread
     stop_event = threading.Event()
     display_thread = threading.Thread(
-        target=display_frames, args=(pipeline, stop_event), daemon=True
+        target=display_frames, args=(camera, stop_event), daemon=True
     )
     display_thread.start()
 
