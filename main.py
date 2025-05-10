@@ -1,4 +1,4 @@
-from voice_interface import *
+from openai_interface import *
 from art import text2art
 
 import time
@@ -10,8 +10,6 @@ import cv2
 # import matplotlib.pyplot as plt
 import os
 import threading
-
-from pynput import keyboard
 
 space_pressed = False
 
@@ -44,12 +42,6 @@ def display_frames(pipeline, stop_event):
             space_pressed = True
 
         time.sleep(0.05)
-
-
-# def on_press(key):
-#     global space_pressed
-#     if key == keyboard.Key.space:
-#         space_pressed = True
 
 
 def ask_what_the_user_wants(context):
@@ -129,8 +121,6 @@ def main():
                 break
 
             art = text2art(user_desire)
-            lines = art.splitlines()
-            # clear_previous_output(previous_lines)
             print(art)
 
             complete_context += "User: " + user_speech
