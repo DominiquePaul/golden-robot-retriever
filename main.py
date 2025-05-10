@@ -25,6 +25,7 @@ def dummy_extract_what_the_user_wants_from_voice():
 
 def display_frames(pipeline, stop_event):
     global latest_frame
+    global space_pressed
     while not stop_event.is_set():
         frames = pipeline.wait_for_frames()
         color_frame = frames.get_color_frame()
@@ -36,15 +37,19 @@ def display_frames(pipeline, stop_event):
             latest_frame = frame.copy()
 
         cv2.imshow("Color", frame)
-        cv2.waitKey(1)
+        # cv2.waitKey(1)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == 32:  # space bar
+            space_pressed = True
 
         time.sleep(0.05)
 
 
-def on_press(key):
-    global space_pressed
-    if key == keyboard.Key.space:
-        space_pressed = True
+# def on_press(key):
+#     global space_pressed
+#     if key == keyboard.Key.space:
+#         space_pressed = True
 
 
 def ask_what_the_user_wants(context):
@@ -76,14 +81,14 @@ def execute_policy():
 def main():
     global space_pressed
 
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
+    # listener = keyboard.Listener(on_press=on_press)
+    # listener.start()
 
     last_img_checking_time = time.time()
     img_check_delta_in_s = 0.5
 
     last_asking_time = 0
-    asking_delta_in_s = 3
+    asking_delta_in_s = 5
 
     pipeline = rs.pipeline()
     config = rs.config()

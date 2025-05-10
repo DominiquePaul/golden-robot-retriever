@@ -41,7 +41,6 @@ class GoldenRetrieverMood(Enum):
 
 
 def convert_text_to_personality(text, context):
-    client = openai.OpenAI()
 
     base_prompt = (
         "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
@@ -49,8 +48,9 @@ def convert_text_to_personality(text, context):
     )
     base_prompt += context
 
-    prompt = f"Please rephrase the question {text} to better fit with your personality. Only answer with the rephrased question."
+    prompt = f"Please rephrase the question {text} to better fit with your personality. Only answer with the rephrased question. If you helped with something before, you can also ask something like 'Do you need help with anything else at the moment'"
 
+    client = openai.OpenAI()
     response = client.responses.create(
         model="gpt-4.1",
         instructions=prompt,
@@ -88,7 +88,10 @@ def text_to_speech(input_text, prev_conversation="", mood=GoldenRetrieverMood.CH
     #         base_prompt + "Speak in a sarcastic and somewhat pissed off tone."
     #     )
 
-    speech_instructions = base_prompt + "Choose your mood according to the previous conversation."
+    speech_instructions = (
+        base_prompt
+        + "Choose your mood according to the previous conversation. You can choose from cheerful, angry (for example if the user annoys you by always saying no), nice if the rest of the conversation seems nice, sassy, or maybe even sarcastic."
+    )
 
     with client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
@@ -200,7 +203,7 @@ def text_to_goal_object_or_none(text):
 
     if "none" in response.output_text.lower():
         return None
-    
+
     return response.output_text
 
 
@@ -212,7 +215,6 @@ def extract_what_the_user_wants_from_voice():
 
     if user_object is None:
         return user_text, None
-
 
     return user_text, user_object
 
@@ -276,6 +278,7 @@ def check_if_user_object_is_visible_in_image(user_object, img):
                     {
                         "type": "input_image",
                         "image_url": f"data:image/jpeg;base64,{base64_image}",
+                        "detail": "low"
                     },
                 ],
             }
