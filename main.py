@@ -65,9 +65,19 @@ def ask_if_this_is_what_we_want(context):
     return new_text
 
 
-def execute_policy():
+def should_try_again(context):
+    question_text = "Should we try this again?"
+    new_text = convert_text_to_personality(question_text, context)
+
+    speech_path = text_to_speech(new_text, context, GoldenRetrieverMood.SARCASTIC)
+    os.system(f"mpg123 {speech_path}")
+
+    return new_text
+
+
+def run_policy():
     print("Attempting to execute policy")
-    return True
+    return False
 
 
 def main():
@@ -101,8 +111,7 @@ def main():
 
     user_desire = None
 
-    # TODO: maintain the whole context for more sassiness/context
-    complete_context = ""
+    complete_context = []
 
     while True:
         time_since_last_ask = time.time() - last_asking_time
@@ -110,20 +119,26 @@ def main():
             last_asking_time = time.time()
             text = ask_what_the_user_wants(complete_context)
 
-            complete_context += "Assistant: " + text
+            complete_context.append({"role": "assistant", "content": text})
 
-        if space_pressed and user_desire is None:
+        if True and user_desire is None:
             space_pressed = False
             # user_speech, user_desire = dummy_extract_what_the_user_wants_from_voice()
             user_speech, user_desire = extract_what_the_user_wants_from_voice()
 
-            if user_desire is None:
+            if user_speech is None and user_desire is None:
+                complete_context.append(
+                    {"role": "user", "content": "User did not answer."}
+                )
+                continue
+
+            elif user_desire is None:
                 break
 
             art = text2art(user_desire)
             print(art)
 
-            complete_context += "User: " + user_speech
+            complete_context.append({"role": "user", "content": user_speech})
 
         # check if we see the object of desire at the moment
         if user_desire is not None:
@@ -150,18 +165,54 @@ def main():
                     # ask if we should bring this one
                     if obj_visible:
                         question = ask_if_this_is_what_we_want(complete_context)
-                        complete_context += "Assistant" + question
+                        complete_context.append(
+                            {"role": "assistant", "content": question}
+                        )
 
                         user_answer, should_grasp = record_and_extract_bool(question)
-                        complete_context += "User: " + user_answer
+                        if user_answer is None and should_grasp is None:
+                            should_grasp = False
+                            user_answer = "User did not say anything"
+
+                        complete_context.append(
+                            {"role": "user", "content": user_answer}
+                        )
 
                         # execute policy
                         if should_grasp:
-                            success = execute_policy()
+                            success = False
 
-                            if success:
-                                user_desire = None
-                                complete_context += "We successfully solved this problem. On to the next one!"
+                            while not success:
+                                success = run_policy()
+
+                                if success:
+                                    user_desire = None
+                                    complete_context.append(
+                                        {
+                                            "role": "user",
+                                            "content": "We successfully solved this problem. On to the next one!",
+                                        }
+                                    )
+                                else:
+                                    assistant_query = should_try_again(complete_context)
+                                    complete_context.append(
+                                        {
+                                            "role": "assistant",
+                                            "content": assistant_query,
+                                        }
+                                    )
+                                    user_answer, try_again = record_and_extract_bool(
+                                        assistant_query
+                                    )
+
+                                    if not try_again:
+                                        complete_context.append(
+                                            {
+                                                "role": "user",
+                                                "content": "We were unfortunately not able to solve this problem. Let's check if we can do something else!",
+                                            }
+                                        )
+                                        break
 
         # other things
         time.sleep(0.05)

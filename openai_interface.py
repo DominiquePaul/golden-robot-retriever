@@ -46,7 +46,7 @@ def convert_text_to_personality(text, context):
         "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
       The previous part of the conversation is this: "
     )
-    base_prompt += context
+    base_prompt += str(context)
 
     prompt = f"Please rephrase the question {text} to better fit with your personality. Only answer with the rephrased question. If you helped with something before, you can also ask something like 'Do you need help with anything else at the moment'"
 
@@ -61,7 +61,7 @@ def convert_text_to_personality(text, context):
     return response.output_text
 
 
-def text_to_speech(input_text, prev_conversation="", mood=GoldenRetrieverMood.CHEERFUL):
+def text_to_speech(input_text, prev_conversation=[], mood=GoldenRetrieverMood.CHEERFUL):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     client = openai.OpenAI()
@@ -71,7 +71,7 @@ def text_to_speech(input_text, prev_conversation="", mood=GoldenRetrieverMood.CH
         "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
       The previous part of the conversation is this: "
     )
-    base_prompt += prev_conversation
+    base_prompt += str(prev_conversation)
 
     # if mood == GoldenRetrieverMood.CHEERFUL:
     #     speech_instructions = base_prompt + "Speak in a cheerful and happy tone."
@@ -173,6 +173,9 @@ def speech_to_text_until_silence():
     record_until_silence()
     print("Recording stopped.")
 
+    if len(speech_frames) < 2:
+        return None
+
     client = openai.OpenAI()
 
     # Save to temp file
@@ -209,6 +212,11 @@ def text_to_goal_object_or_none(text):
 
 def extract_what_the_user_wants_from_voice():
     user_text = speech_to_text_until_silence()
+    
+    if user_text is None:
+        print ("Did not record anything")
+        return None, None
+
     user_object = text_to_goal_object_or_none(user_text)
 
     print(f"The user wants: {user_object}")
@@ -238,6 +246,9 @@ def text_to_yes_no(question, answer):
 
 def record_and_extract_bool(question_we_asked):
     user_text = speech_to_text_until_silence()
+    if user_text is None:
+        return None, None
+    
     test, res = text_to_yes_no(question_we_asked, user_text)
     print(res)
 
