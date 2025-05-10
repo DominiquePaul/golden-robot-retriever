@@ -18,8 +18,10 @@ space_pressed = False
 latest_frame = None
 frame_lock = threading.Lock()
 
+
 def dummy_extract_what_the_user_wants_from_voice():
     return "Please bring me a can to drink", "can"
+
 
 def display_frames(pipeline):
     global latest_frame
@@ -36,7 +38,7 @@ def display_frames(pipeline):
         cv2.imshow("Color", frame)
         cv2.waitKey(1)
 
-        time.sleep(.05)
+        time.sleep(0.05)
 
 
 def on_press(key):
@@ -45,17 +47,25 @@ def on_press(key):
         space_pressed = True
 
 
-def ask_what_the_user_wants():
-    speech_path = text_to_speech("How can I help you?", GoldenRetrieverMood.SARCASTIC)
+def ask_what_the_user_wants(context):
+    text = "How can I help you?"
+
+    new_text = convert_text_to_personality(text, context)
+
+    speech_path = text_to_speech(new_text, context, GoldenRetrieverMood.CHEERFUL)
     os.system(f"mpg123 {speech_path}")
 
+    return new_text
 
-def ask_if_this_is_what_we_want():
+
+def ask_if_this_is_what_we_want(context):
     question_text = "Is this what you want?"
-    speech_path = text_to_speech(question_text, GoldenRetrieverMood.SARCASTIC)
+    new_text = convert_text_to_personality(question_text, context)
+
+    speech_path = text_to_speech(new_text, context, GoldenRetrieverMood.SARCASTIC)
     os.system(f"mpg123 {speech_path}")
 
-    return question_text
+    return new_text
 
 
 def execute_policy():
@@ -86,7 +96,9 @@ def main():
     sensor.set_option(rs.option.exposure, 10000.000)
 
     # Start display thread
-    display_thread = threading.Thread(target=display_frames, args=(pipeline,), daemon=True)
+    display_thread = threading.Thread(
+        target=display_frames, args=(pipeline,), daemon=True
+    )
     display_thread.start()
 
     user_desire = None
@@ -98,7 +110,9 @@ def main():
         time_since_last_ask = time.time() - last_asking_time
         if user_desire is None and time_since_last_ask > asking_delta_in_s:
             last_asking_time = time.time()
-            ask_what_the_user_wants()
+            text = ask_what_the_user_wants(complete_context)
+
+            complete_context += "Assistant: " + text
 
         if space_pressed and user_desire is None:
             space_pressed = False
@@ -109,6 +123,8 @@ def main():
             # clear_previous_output(previous_lines)
             print(art)
 
+            complete_context += "User: " + user_speech
+
         # check if we see the object of desire at the moment
         if user_desire is not None:
             time_since_last_img_check = time.time() - last_img_checking_time
@@ -116,12 +132,11 @@ def main():
                 last_img_checking_time = time.time()
 
                 with frame_lock:
-                    print("updating frame copy")
-                    frame_copy = latest_frame.copy() if latest_frame is not None else None
+                    frame_copy = (
+                        latest_frame.copy() if latest_frame is not None else None
+                    )
 
                 if user_desire is not None and frame_copy is not None:
-                    print("scaling")
-                    
                     downscaled = cv2.resize(frame_copy, (0, 0), fx=0.5, fy=0.5)
                     # cv2.imshow("Scaled", downscaled)
                     # cv2.waitKey(1)
@@ -134,9 +149,11 @@ def main():
 
                     # ask if we should bring this one
                     if obj_visible:
-                        question = ask_if_this_is_what_we_want()
+                        question = ask_if_this_is_what_we_want(complete_context)
+                        complete_context += "Assistant" + question
 
                         user_answer, should_grasp = record_and_extract_bool(question)
+                        complete_context += "User: " + user_answer
 
                         # execute policy
                         if should_grasp:

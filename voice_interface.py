@@ -40,28 +40,55 @@ class GoldenRetrieverMood(Enum):
     SARCASTIC = 4
 
 
-def text_to_speech(input_text, mood=GoldenRetrieverMood.CHEERFUL):
+def convert_text_to_personality(text, context):
+    client = openai.OpenAI()
+
+    base_prompt = (
+        "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
+      The previous part of the conversation is this: "
+    )
+    base_prompt += context
+
+    prompt = f"Please rephrase the question {text} to better fit with your personality. Only answer with the rephrased question."
+
+    response = client.responses.create(
+        model="gpt-4.1",
+        instructions=prompt,
+        input=text,
+    )
+
+    print(response.output_text)
+    return response.output_text
+
+
+def text_to_speech(input_text, prev_conversation="", mood=GoldenRetrieverMood.CHEERFUL):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     client = openai.OpenAI()
     speech_file_path = Path(__file__).parent / f"robot_answers/{timestamp}_speech.mp3"
 
-    base_prompt = "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence."
+    base_prompt = (
+        "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
+      The previous part of the conversation is this: "
+    )
+    base_prompt += prev_conversation
 
-    if mood == GoldenRetrieverMood.CHEERFUL:
-        speech_instructions = base_prompt + "Speak in a cheerful and happy tone."
-    elif mood == GoldenRetrieverMood.ANGRY:
-        speech_instructions = base_prompt + "Speak in an angry and annoyed tone."
-    elif mood == GoldenRetrieverMood.NICE:
-        speech_instructions = base_prompt + "Speak in a nice and friendly tone."
-    elif mood == GoldenRetrieverMood.SASSY:
-        speech_instructions = (
-            base_prompt + "Speak in a sassy and somewhat annoyed tone."
-        )
-    elif mood == GoldenRetrieverMood.SARCASTIC:
-        speech_instructions = (
-            base_prompt + "Speak in a sarcastic and somewhat pissed off tone."
-        )
+    # if mood == GoldenRetrieverMood.CHEERFUL:
+    #     speech_instructions = base_prompt + "Speak in a cheerful and happy tone."
+    # elif mood == GoldenRetrieverMood.ANGRY:
+    #     speech_instructions = base_prompt + "Speak in an angry and annoyed tone."
+    # elif mood == GoldenRetrieverMood.NICE:
+    #     speech_instructions = base_prompt + "Speak in a nice and friendly tone."
+    # elif mood == GoldenRetrieverMood.SASSY:
+    #     speech_instructions = (
+    #         base_prompt + "Speak in a sassy and somewhat annoyed tone."
+    #     )
+    # elif mood == GoldenRetrieverMood.SARCASTIC:
+    #     speech_instructions = (
+    #         base_prompt + "Speak in a sarcastic and somewhat pissed off tone."
+    #     )
+
+    speech_instructions = base_prompt + "Choose your mood according to the previous conversation."
 
     with client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
