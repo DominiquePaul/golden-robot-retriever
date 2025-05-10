@@ -20,21 +20,22 @@ from loguru import logger
 logger.info("Starting ACT policy server...")
 
 import argparse
+import json
 from pathlib import Path
 from typing import List
-import json
+
 import cv2
 import json_numpy
 import numpy as np
 import torch
 import torch.nn as nn
 import uvicorn
-from packaging import version  # Don't remove this line (used by lerobot)
 from fastapi import FastAPI, HTTPException
 from huggingface_hub import snapshot_download
 from huggingface_hub.errors import RepositoryNotFoundError
 from huggingface_hub.utils._validators import HFValidationError
 from lerobot.common.policies.act.modeling_act import ACTPolicy
+from packaging import version  # Don't remove this line (used by lerobot)
 from pydantic import BaseModel
 
 app = FastAPI()

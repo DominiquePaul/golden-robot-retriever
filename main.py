@@ -1,17 +1,14 @@
-from openai_interface import *
-from art import text2art
-
-import openai
-
-import time
-
-import pyrealsense2 as rs
-
-import cv2
-
 # import matplotlib.pyplot as plt
 import os
 import threading
+import time
+
+import cv2
+import openai
+import pyrealsense2 as rs
+from art import text2art
+
+from openai_interface import *
 
 ## setup key with
 # echo "export OPENAI_API_KEY='yourkey'" >> ~/.bashrc

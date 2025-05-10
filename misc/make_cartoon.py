@@ -1,12 +1,11 @@
 import base64
 import datetime
 import time
-import numpy as np
 
-from openai import OpenAI
 import cv2
+import numpy as np
 import pyrealsense2 as rs
-
+from openai import OpenAI
 from pynput import keyboard
 
 space_pressed = False
@@ -43,7 +42,9 @@ def main():
         if True or space_pressed:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             img_path = f"image_{timestamp}.jpg"
-            retval, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            retval, buffer = cv2.imencode(
+                ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 75]
+            )
 
             with open(img_path, "wb") as f:
                 f.write(buffer)
@@ -59,7 +60,6 @@ def main():
 
             image_base64 = result.data[0].b64_json
             image_bytes = base64.b64decode(image_base64)
-
 
             # Save the image to a file
             with open(f"{timestamp}_cartoon.png", "wb") as f:

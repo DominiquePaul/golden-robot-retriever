@@ -1,8 +1,9 @@
-from phosphobot.camera import AllCameras
-import httpx
-from phosphobot.am import ACT
 import time
+
+import httpx
 import numpy as np
+from phosphobot.am import ACT
+from phosphobot.camera import AllCameras
 
 # Initialize hardware interfaces
 PHOSPHOBOT_API_URL = "http://0.0.0.0:80"
@@ -17,19 +18,23 @@ while True:
     images = [
         allcameras.get_rgb_frame(0, resize=(240, 320)),
         allcameras.get_rgb_frame(1, resize=(240, 320)),
-      ]
+    ]
 
     # Get current robot state
     state = httpx.post(f"{PHOSPHOBOT_API_URL}/joints/read").json()
 
-    
-
     # Generate actions
     start = time.time()
     actions = model(
-        {"observation.state": np.array(state["angles_rad"]), 
-         "observation.images.main": np.array(allcameras.get_rgb_frame(0, resize=(240, 320))),
-         "observation.images.secondary_0": np.array(allcameras.get_rgb_frame(1, resize=(240, 320)))},
+        {
+            "observation.state": np.array(state["angles_rad"]),
+            "observation.images.main": np.array(
+                allcameras.get_rgb_frame(0, resize=(240, 320))
+            ),
+            "observation.images.secondary_0": np.array(
+                allcameras.get_rgb_frame(1, resize=(240, 320))
+            ),
+        },
     )
     end = time.time()
     # print(f"Time taken for inference: {end - start:.4f} seconds")

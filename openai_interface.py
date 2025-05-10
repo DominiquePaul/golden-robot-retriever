@@ -1,24 +1,20 @@
-from pathlib import Path
 import base64
-from scipy.io.wavfile import write
-import numpy as np
-
-from enum import Enum
-
-import sounddevice as sd
-import tempfile
 import collections
-import webrtcvad
-
 import os
+import tempfile
+from enum import Enum
+from pathlib import Path
+
+import numpy as np
+import sounddevice as sd
+import webrtcvad
+from scipy.io.wavfile import write
 
 os.environ["QT_QPA_PLATFORM"] = "xcb"  # or "wayland"
+import datetime
+
 import cv2
 
-import ssl
-import urllib3
-
-import datetime
 
 class GoldenRetrieverMood(Enum):
     """How the robodog is feeling atm."""
@@ -31,7 +27,6 @@ class GoldenRetrieverMood(Enum):
 
 
 def convert_text_to_personality(client, text, context):
-
     base_prompt = (
         "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
       The previous part of the conversation is this: "
@@ -52,7 +47,9 @@ def convert_text_to_personality(client, text, context):
     return response.output_text
 
 
-def text_to_speech(client, input_text, prev_conversation=[], mood=GoldenRetrieverMood.CHEERFUL):
+def text_to_speech(
+    client, input_text, prev_conversation=[], mood=GoldenRetrieverMood.CHEERFUL
+):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # client = openai.OpenAI()
@@ -63,21 +60,6 @@ def text_to_speech(client, input_text, prev_conversation=[], mood=GoldenRetrieve
       The previous part of the conversation is this: "
     )
     base_prompt += str(prev_conversation)
-
-    # if mood == GoldenRetrieverMood.CHEERFUL:
-    #     speech_instructions = base_prompt + "Speak in a cheerful and happy tone."
-    # elif mood == GoldenRetrieverMood.ANGRY:
-    #     speech_instructions = base_prompt + "Speak in an angry and annoyed tone."
-    # elif mood == GoldenRetrieverMood.NICE:
-    #     speech_instructions = base_prompt + "Speak in a nice and friendly tone."
-    # elif mood == GoldenRetrieverMood.SASSY:
-    #     speech_instructions = (
-    #         base_prompt + "Speak in a sassy and somewhat annoyed tone."
-    #     )
-    # elif mood == GoldenRetrieverMood.SARCASTIC:
-    #     speech_instructions = (
-    #         base_prompt + "Speak in a sarcastic and somewhat pissed off tone."
-    #     )
 
     speech_instructions = (
         base_prompt
@@ -204,9 +186,9 @@ def text_to_goal_object_or_none(client, text):
 
 def extract_what_the_user_wants_from_voice(client):
     user_text = speech_to_text_until_silence(client)
-    
+
     if user_text is None:
-        print ("Did not record anything")
+        print("Did not record anything")
         return None, None
 
     user_object = text_to_goal_object_or_none(client, user_text)
@@ -241,7 +223,7 @@ def record_and_extract_bool(client, question_we_asked):
     user_text = speech_to_text_until_silence(client)
     if user_text is None:
         return None, None
-    
+
     test, res = text_to_yes_no(client, question_we_asked, user_text)
     print(res)
 
@@ -252,7 +234,7 @@ def check_if_user_object_is_visible_in_image(client, user_object, img):
     # Getting the Base64 string
     # retval, buffer = cv2.imencode(".jpg", img)
     # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale (8-bit)
-    retval, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    _, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
 
     base64_image = base64.b64encode(buffer).decode("utf-8")
 
@@ -283,7 +265,7 @@ def check_if_user_object_is_visible_in_image(client, user_object, img):
                     {
                         "type": "input_image",
                         "image_url": f"data:image/jpeg;base64,{base64_image}",
-                        "detail": "low"
+                        "detail": "low",
                     },
                 ],
             }
