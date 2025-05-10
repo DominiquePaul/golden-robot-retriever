@@ -20,7 +20,6 @@ from golden_robot_retriever.openai_interface import (
     check_if_user_object_is_visible_in_image,
 )
 from golden_robot_retriever.cameras import get_camera
-from golden_robot_retriever.robot_code import GraspingPolicy
 
 space_pressed = False
 
@@ -28,6 +27,9 @@ latest_frame = None
 frame_lock = threading.Lock()
 
 DEBUG = True
+
+if not DEBUG:
+    from golden_robot_retriever.robot_code.client import GraspingPolicy
 
 
 def display_frames(camera, stop_event):
@@ -110,6 +112,12 @@ def should_try_again(client, context):
     return text_to_personality_speech(client, text, context)
 
 
+def please_take_the_object(client, context, obj):
+    """Tell the user that he should take the object."""
+    text = f"Here's your {obj}"
+    return text_to_personality_speech(client, text, context)
+
+
 def mock_run_policy(max_runtime_s=15):
     """Execute the robot's grasping policy and return success status."""
     print("Attempting to execute policy")
@@ -124,7 +132,8 @@ class GoldenRetriever:
         self.last_asking_time = 0
         self.asking_delta_in_s = 5
 
-        self.policy = GraspingPolicy()
+        if not DEBUG:
+            self.policy = GraspingPolicy()
 
         try:
             self.camera = get_camera("webcam")
@@ -282,7 +291,6 @@ class GoldenRetriever:
                                         success = self.policy.run(max_runtime_s=15)
 
                                     if success:
-                                        self.user_desire = None
                                         self.conversation_history.append(
                                             {
                                                 "role": "user",
@@ -329,6 +337,7 @@ class GoldenRetriever:
                                 # drop the stuff when back at the persons place
                                 while not should_drop:
                                     # check if a hand is visible in the camera
+                                    print("Not yet dropping, am not seeing the signal.")
                                     with frame_lock:
                                         frame_copy = (
                                             latest_frame.copy()
@@ -347,6 +356,15 @@ class GoldenRetriever:
                                             )
                                         )
                                     time.sleep(4)
+
+                                please_take_the_object(
+                                    self.client,
+                                    self.conversation_history,
+                                    self.user_desire,
+                                )
+
+                                self.user_desire = None
+
 
                 # other things
                 time.sleep(0.05)
