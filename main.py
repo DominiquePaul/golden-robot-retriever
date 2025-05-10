@@ -54,9 +54,7 @@ def display_frames(pipeline, stop_event):
         time.sleep(0.05)
 
 
-def ask_what_the_user_wants(client, context):
-    text = "How can I help you?"
-
+def text_to_personality_speech(client, text, context):
     new_text = convert_text_to_personality(client, text, context)
 
     speech_path = text_to_speech(
@@ -67,54 +65,29 @@ def ask_what_the_user_wants(client, context):
     return new_text
 
 
+def ask_what_the_user_wants(client, context):
+    text = "How can I help you?"
+    return text_to_personality_speech(client, text, context)
+
+
 def ask_if_this_is_what_we_want(client, context):
-    question_text = "This fits the description, is this what you want?"
-    new_text = convert_text_to_personality(client, question_text, context)
-
-    speech_path = text_to_speech(
-        client, new_text, context, GoldenRetrieverMood.SARCASTIC
-    )
-    os.system(f"mpg123 {speech_path}")
-
-    return new_text
+    text = "This fits the description, is this what you want?"
+    return text_to_personality_speech(client, text, context)
 
 
 def we_grabbed_stuff(client, context):
     text = "Ok, we grasped the object, bringing it to you now."
-
-    new_text = convert_text_to_personality(client, text, context)
-
-    speech_path = text_to_speech(
-        client, new_text, context, GoldenRetrieverMood.CHEERFUL
-    )
-    os.system(f"mpg123 {speech_path}")
-
-    return new_text
+    return text_to_personality_speech(client, text, context)
 
 
 def tell_that_we_cant_see_obj_yet(client, context, obj):
     text = f"We did not yet find {obj}, we'll keep looking."
-
-    new_text = convert_text_to_personality(client, text, context)
-
-    speech_path = text_to_speech(
-        client, new_text, context, GoldenRetrieverMood.CHEERFUL
-    )
-    os.system(f"mpg123 {speech_path}")
-
-    return new_text
+    return text_to_personality_speech(client, text, context)
 
 
 def should_try_again(client, context):
-    question_text = "Should we try this again?"
-    new_text = convert_text_to_personality(client, question_text, context)
-
-    speech_path = text_to_speech(
-        client, new_text, context, GoldenRetrieverMood.SARCASTIC
-    )
-    os.system(f"mpg123 {speech_path}")
-
-    return new_text
+    text = "Should we try this again?"
+    return text_to_personality_speech(client, text, context)
 
 
 def run_policy():
@@ -212,7 +185,9 @@ def main():
                     print(obj_visible)
 
                     if not obj_visible:
-                        tell_that_we_cant_see_obj_yet(client, complete_context, user_desire)
+                        tell_that_we_cant_see_obj_yet(
+                            client, complete_context, user_desire
+                        )
 
                     # ask if we should bring this one
                     else:
