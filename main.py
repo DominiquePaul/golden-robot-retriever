@@ -68,11 +68,37 @@ def ask_what_the_user_wants(client, context):
 
 
 def ask_if_this_is_what_we_want(client, context):
-    question_text = "Is this what you want?"
+    question_text = "This fits the description, is this what you want?"
     new_text = convert_text_to_personality(client, question_text, context)
 
     speech_path = text_to_speech(
         client, new_text, context, GoldenRetrieverMood.SARCASTIC
+    )
+    os.system(f"mpg123 {speech_path}")
+
+    return new_text
+
+
+def we_grabbed_stuff(client, context):
+    text = "Ok, we grasped the object, bringing it to you now."
+
+    new_text = convert_text_to_personality(client, text, context)
+
+    speech_path = text_to_speech(
+        client, new_text, context, GoldenRetrieverMood.CHEERFUL
+    )
+    os.system(f"mpg123 {speech_path}")
+
+    return new_text
+
+
+def tell_that_we_cant_see_obj_yet(client, context, obj):
+    text = f"We did not yet find {obj}, we'll keep looking."
+
+    new_text = convert_text_to_personality(client, text, context)
+
+    speech_path = text_to_speech(
+        client, new_text, context, GoldenRetrieverMood.CHEERFUL
     )
     os.system(f"mpg123 {speech_path}")
 
@@ -94,6 +120,11 @@ def should_try_again(client, context):
 def run_policy():
     print("Attempting to execute policy")
     return True
+
+
+def run_dropping_policy():
+    print("Run dropping policy")
+    pass
 
 
 def main():
@@ -180,8 +211,11 @@ def main():
 
                     print(obj_visible)
 
+                    if not obj_visible:
+                        tell_that_we_cant_see_obj_yet(client, complete_context, user_desire)
+
                     # ask if we should bring this one
-                    if obj_visible:
+                    else:
                         question = ask_if_this_is_what_we_want(client, complete_context)
                         complete_context.append(
                             {"role": "assistant", "content": question}
@@ -235,6 +269,39 @@ def main():
                                             }
                                         )
                                         break
+
+                            # tell user that we grasped the obj
+                            text = we_grabbed_stuff(client, complete_context)
+                            complete_context.append(
+                                {
+                                    "role": "assistant",
+                                    "content": text,
+                                }
+                            )
+
+                            should_drop = False
+                            # drop the stuff when back at the persons place
+                            while not should_drop:
+                                # check if a hand is visible in the camera
+                                with frame_lock:
+                                    frame_copy = (
+                                        latest_frame.copy()
+                                        if latest_frame is not None
+                                        else None
+                                    )
+
+                                downscaled = cv2.resize(
+                                    frame_copy, (0, 0), fx=0.5, fy=0.5
+                                )
+                                # cv2.imshow("Scaled", downscaled)
+                                # cv2.waitKey(1)
+
+                                should_drop = check_if_user_object_is_visible_in_image(
+                                    client, "open hand", downscaled
+                                )
+                                time.sleep(4)
+
+                            run_dropping_policy()
 
         # other things
         time.sleep(0.05)
