@@ -1,7 +1,5 @@
 from pathlib import Path
-import openai
 import base64
-
 from scipy.io.wavfile import write
 import numpy as np
 
