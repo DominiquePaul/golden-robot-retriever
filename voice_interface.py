@@ -12,9 +12,13 @@ import tempfile
 import collections
 import webrtcvad
 
+import os
+
+os.environ["QT_QPA_PLATFORM"] = "xcb"  # or "wayland"
 import cv2
 
-import os
+import ssl
+import urllib3
 
 import datetime
 
@@ -179,11 +183,15 @@ def extract_what_the_user_wants_from_voice():
 
 def check_if_user_object_is_visible_in_image(user_object, img):
     # Getting the Base64 string
-    retval, buffer = cv2.imencode(".jpg", img)
+    # retval, buffer = cv2.imencode(".jpg", img)
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale (8-bit)
+    retval, buffer = cv2.imencode(".jpg", img_gray, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+
     base64_image = base64.b64encode(buffer).decode("utf-8")
 
     client = openai.OpenAI()
     response = client.responses.create(
+        # model="o4-mini",
         model="gpt-4.1",
         input=[
             {
@@ -191,7 +199,7 @@ def check_if_user_object_is_visible_in_image(user_object, img):
                 "content": [
                     {
                         "type": "input_text",
-                        "text": f"Is the object {user_object} in the image?",
+                        "text": f"Is the object {user_object} in the image? Yes or no only, please.",
                     },
                     {
                         "type": "input_image",
@@ -203,6 +211,11 @@ def check_if_user_object_is_visible_in_image(user_object, img):
     )
 
     print(response.output_text)
+
+    if "yes" in response.output_text:
+        return True
+
+    return False
 
 
 if __name__ == "__main__":
