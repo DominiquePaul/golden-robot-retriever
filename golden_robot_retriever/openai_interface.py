@@ -15,15 +15,15 @@ import datetime
 
 import cv2
 
+# class LLMConvo:
+#     def __init__(self):
+#         self.client = client
+#         self.conversation_history = []
+#         self.system_prompt = system_prompt
+#         self.client = 
 
-class GoldenRetrieverMood(Enum):
-    """How the robodog is feeling atm."""
-
-    ANGRY = 0
-    NICE = 1
-    CHEERFUL = 2
-    SASSY = 3
-    SARCASTIC = 4
+#     def add_message(self, message):
+#         self.conversation_history.append(message)
 
 
 def convert_text_to_personality(client, text, context):
@@ -37,7 +37,6 @@ def convert_text_to_personality(client, text, context):
 
     # client = openai.OpenAI()
     response = client.responses.create(
-        # model="gpt-4.1",
         model="gpt-4.1-nano",
         instructions=prompt,
         input=text,
@@ -47,9 +46,7 @@ def convert_text_to_personality(client, text, context):
     return response.output_text
 
 
-def text_to_speech(
-    client, input_text, prev_conversation=[], mood=GoldenRetrieverMood.CHEERFUL
-):
+def text_to_speech(client, input_text, prev_conversation=[]):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # client = openai.OpenAI()
@@ -65,6 +62,8 @@ def text_to_speech(
         base_prompt
         + "Choose your mood according to the previous conversation. You can choose from cheerful, angry (for example if the user annoys you by always saying no), nice if the rest of the conversation seems nice, sassy, or maybe even sarcastic."
     )
+
+    os.makedirs("robot_answers", exist_ok=True)
 
     with client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
@@ -109,7 +108,7 @@ def speech_to_text_until_silence(client):
     samplerate = 16000
     frame_duration_ms = 30  # ms
     frame_size = int(samplerate * frame_duration_ms / 1000)
-    vad = webrtcvad.Vad(3)  # 0–3, more = more aggressive
+    vad = webrtcvad.Vad(1)  # 0–3, more = more aggressive
 
     ring_buffer = collections.deque(maxlen=5)
     speech_frames = []
@@ -129,7 +128,7 @@ def speech_to_text_until_silence(client):
                 if not triggered:
                     ring_buffer.append((pcm, is_speech))
                     num_voiced = len([f for f, speech in ring_buffer if speech])
-                    if num_voiced > 0.5 * ring_buffer.maxlen:
+                    if num_voiced > 0.8 * ring_buffer.maxlen:
                         triggered = True
                         speech_frames.extend([f for f, _ in ring_buffer])
                         ring_buffer.clear()
@@ -137,7 +136,7 @@ def speech_to_text_until_silence(client):
                     speech_frames.append(pcm)
                     ring_buffer.append((pcm, is_speech))
                     num_unvoiced = len([f for f, speech in ring_buffer if not speech])
-                    if num_unvoiced > 0.5 * ring_buffer.maxlen:
+                    if num_unvoiced > 0.8* ring_buffer.maxlen:
                         break
         finally:
             stream.stop()
@@ -242,6 +241,7 @@ def check_if_user_object_is_visible_in_image(client, user_object, img):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Save binary JPEG
+    os.makedirs("imgs", exist_ok=True)
     with open(f"imgs/image_{timestamp}.jpg", "wb") as f:
         f.write(buffer)
 
@@ -282,7 +282,7 @@ def check_if_user_object_is_visible_in_image(client, user_object, img):
 
 if __name__ == "__main__":
     input_text = "Please hurry up, I do not have time forever! This is now the 4th item we are looking at, and you are still unhappy."
-    speech_path = text_to_speech(input_text, GoldenRetrieverMood.SARCASTIC)
+    speech_path = text_to_speech(input_text, [])
     os.system(
         f"mpg123 {speech_path}"
     )  # uses mpg123 to play mp3 (ensure it's installed)

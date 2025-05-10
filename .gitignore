@@ -1,3 +1,7 @@
+robot_answers/
+robot_imgs/
+imgs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
