@@ -1,0 +1,27 @@
+[project]
+name = "golden-robot-retriever"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Dominique Paul",email = "dominique.c.a.paul@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python (>=4.11.0.86,<5.0.0.0)",
+    "httpx (>=0.28.1,<0.29.0)",
+    "json-numpy (>=2.1.0,<3.0.0)",
+    "lerobot @ file:///Users/dpaul/Documents/09%20Robotics/lerobot"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+
+
+[tool.poetry.dependencies]
+lerobot = {develop = true}
