@@ -9,6 +9,7 @@ from art import text2art
 from dotenv import load_dotenv
 import numpy as np
 import matplotlib.pyplot as plt
+
 load_dotenv()
 
 from golden_robot_retriever.openai_interface import (
@@ -27,12 +28,16 @@ frame_lock = threading.Lock()
 
 DEBUG = True
 
+if not DEBUG:
+    from golden_robot_retriever.robot_code.client import GraspingPolicy
+
+
 def display_frames(camera, stop_event):
     """Display camera frames and check for space bar presses in a separate thread."""
     global latest_frame
     while not stop_event.is_set():
         frame = camera.get_frame()
-        
+
         if frame is None:
             print("Warning: Camera returned None frame")
             time.sleep(0.1)
@@ -43,14 +48,14 @@ def display_frames(camera, stop_event):
             print(f"Warning: Invalid frame dimensions: {frame.shape}")
             time.sleep(0.1)
             continue
-        
+
         # Ensure frame values are within valid range for display
         try:
             # Make a normalized copy for display
             display_frame = frame.copy()
             if display_frame.dtype != np.uint8:
                 display_frame = np.clip(display_frame, 0, 255).astype(np.uint8)
-                
+
             with frame_lock:
                 latest_frame = frame.copy()
 
@@ -63,7 +68,7 @@ def display_frames(camera, stop_event):
             # plt.pause(0.001)
         except Exception as e:
             print(f"Error displaying frame: {e}")
-            
+
         time.sleep(0.05)
 
 
@@ -107,27 +112,37 @@ def should_try_again(client, context):
     return text_to_personality_speech(client, text, context)
 
 
-def run_policy():
+def please_take_the_object(client, context, obj):
+    """Tell the user that he should take the object."""
+    text = f"Here's your {obj}"
+    return text_to_personality_speech(client, text, context)
+
+
+def mock_run_policy(max_runtime_s=15):
     """Execute the robot's grasping policy and return success status."""
     print("Attempting to execute policy")
     return True
 
 
-class GoldenRetriever():
-
+class GoldenRetriever:
     def __init__(self):
         self.client = openai.OpenAI()
         self.last_img_checking_time = time.time()
         self.img_check_delta_in_s = 0.5
         self.last_asking_time = 0
         self.asking_delta_in_s = 5
-        
+
+        if not DEBUG:
+            self.policy = GraspingPolicy()
+
         try:
             self.camera = get_camera("webcam")
             self.user_desire = None
             self.conversation_history = []
             self.stop_event = threading.Event()
-            self.display_thread = threading.Thread(target=display_frames, args=(self.camera, self.stop_event), daemon=True)
+            self.display_thread = threading.Thread(
+                target=display_frames, args=(self.camera, self.stop_event), daemon=True
+            )
             self.display_thread.start()
         except Exception as e:
             print(f"Error initializing camera: {e}")
@@ -144,22 +159,30 @@ class GoldenRetriever():
 
     def cleanup(self):
         """Properly close resources."""
-        if hasattr(self, 'stop_event'):
+        if hasattr(self, "stop_event"):
             self.stop_event.set()
-        
-        if hasattr(self, 'display_thread') and self.display_thread is not None and self.display_thread.is_alive():
+
+        if (
+            hasattr(self, "display_thread")
+            and self.display_thread is not None
+            and self.display_thread.is_alive()
+        ):
             self.display_thread.join(timeout=1.0)
-            
-        if hasattr(self, 'camera') and self.camera is not None and hasattr(self.camera, 'close'):
+
+        if (
+            hasattr(self, "camera")
+            and self.camera is not None
+            and hasattr(self.camera, "close")
+        ):
             self.camera.close()
-            
+
         # Close any OpenCV windows
         cv2.destroyAllWindows()
 
     @property
     def time_since_last_ask(self):
         return time.time() - self.last_asking_time
-    
+
     @property
     def time_to_evaluate_image_again(self):
         time_since_last_img_check = time.time() - self.last_img_checking_time
@@ -167,12 +190,11 @@ class GoldenRetriever():
         if result:
             self.last_img_checking_time = time.time()
         return result
-    
+
     def ask_user_for_desire(self):
         self.last_asking_time = time.time()
         text = ask_what_the_user_wants(self.client, self.conversation_history)
         self.conversation_history.append({"role": "assistant", "content": text})
-    
 
     def run(self):
         """Main function orchestrating the retrieval robot's behavior loop."""
@@ -182,8 +204,11 @@ class GoldenRetriever():
 
         try:
             while True:
-                should_ask_user_for_desire = self.user_desire is None and self.time_since_last_ask > self.asking_delta_in_s
-                
+                should_ask_user_for_desire = (
+                    self.user_desire is None
+                    and self.time_since_last_ask > self.asking_delta_in_s
+                )
+
                 if should_ask_user_for_desire:
                     self.ask_user_for_desire()
 
@@ -192,17 +217,25 @@ class GoldenRetriever():
                         user_speech = "One Coca cola please."
                         self.user_desire = "Coca cola"
                     else:
-                        user_speech, self.user_desire = extract_what_the_user_wants_from_voice(self.client)
+                        user_speech, self.user_desire = (
+                            extract_what_the_user_wants_from_voice(self.client)
+                        )
 
                     if user_speech is None and self.user_desire is None:
-                        self.conversation_history.append({"role": "user", "content": "User did not answer."})
+                        self.conversation_history.append(
+                            {"role": "user", "content": "User did not answer."}
+                        )
                         continue
 
                     elif self.user_desire is None:
                         break
 
-                    print(text2art(self.user_desire)) # print ascii art of desired object for extra prominence in console.
-                    self.conversation_history.append({"role": "user", "content": user_speech})
+                    print(
+                        text2art(self.user_desire)
+                    )  # print ascii art of desired object for extra prominence in console.
+                    self.conversation_history.append(
+                        {"role": "user", "content": user_speech}
+                    )
 
                 # check if we see the object of desire at the moment
 
@@ -211,7 +244,9 @@ class GoldenRetriever():
                     with frame_lock:
                         if latest_frame is None:
                             raise Exception("No frame found")
-                        frame_copy = (latest_frame.copy() if latest_frame is not None else None)
+                        frame_copy = (
+                            latest_frame.copy() if latest_frame is not None else None
+                        )
 
                     if frame_copy is not None:
                         downscaled_img = cv2.resize(frame_copy, (0, 0), fx=0.5, fy=0.5)
@@ -227,7 +262,9 @@ class GoldenRetriever():
 
                         else:
                             # ask if we should bring the object
-                            question = ask_if_this_is_what_we_want(self.client, self.conversation_history, self.user_desire)
+                            question = ask_if_this_is_what_we_want(
+                                self.client, self.conversation_history, self.user_desire
+                            )
                             self.conversation_history.append(
                                 {"role": "assistant", "content": question}
                             )
@@ -248,10 +285,12 @@ class GoldenRetriever():
                                 success = False
 
                                 while not success:
-                                    success = run_policy()
+                                    if DEBUG:
+                                        success = mock_run_policy(max_runtime_s=15)
+                                    else:
+                                        success = self.policy.run(max_runtime_s=15)
 
                                     if success:
-                                        self.user_desire = None
                                         self.conversation_history.append(
                                             {
                                                 "role": "user",
@@ -268,8 +307,10 @@ class GoldenRetriever():
                                                 "content": assistant_query,
                                             }
                                         )
-                                        user_answer, try_again = record_and_extract_bool(
-                                            self.client, assistant_query
+                                        user_answer, try_again = (
+                                            record_and_extract_bool(
+                                                self.client, assistant_query
+                                            )
                                         )
 
                                         if not try_again:
@@ -282,7 +323,9 @@ class GoldenRetriever():
                                             break
 
                                 # tell user that we grasped the obj
-                                text = we_grabbed_stuff(self.client, self.conversation_history)
+                                text = we_grabbed_stuff(
+                                    self.client, self.conversation_history
+                                )
                                 self.conversation_history.append(
                                     {
                                         "role": "assistant",
@@ -294,6 +337,7 @@ class GoldenRetriever():
                                 # drop the stuff when back at the persons place
                                 while not should_drop:
                                     # check if a hand is visible in the camera
+                                    print("Not yet dropping, am not seeing the signal.")
                                     with frame_lock:
                                         frame_copy = (
                                             latest_frame.copy()
@@ -306,10 +350,21 @@ class GoldenRetriever():
                                             frame_copy, (0, 0), fx=0.5, fy=0.5
                                         )
 
-                                        should_drop = check_if_user_object_is_visible_in_image(
-                                            self.client, "open hand", downscaled
+                                        should_drop = (
+                                            check_if_user_object_is_visible_in_image(
+                                                self.client, "open hand", downscaled
+                                            )
                                         )
                                     time.sleep(4)
+
+                                please_take_the_object(
+                                    self.client,
+                                    self.conversation_history,
+                                    self.user_desire,
+                                )
+
+                                self.user_desire = None
+
 
                 # other things
                 time.sleep(0.05)
