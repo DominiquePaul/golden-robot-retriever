@@ -26,7 +26,7 @@ space_pressed = False
 latest_frame = None
 frame_lock = threading.Lock()
 
-DEBUG = True
+DEBUG = False
 
 if not DEBUG:
     from golden_robot_retriever.robot_code.client import GraspingPolicy
@@ -66,6 +66,8 @@ def display_frames(camera, stop_event):
             # plt.axis('off')
             # plt.draw()
             # plt.pause(0.001)
+            # cv2.imshow("Camera Feed", display_frame)
+            # cv2.waitKey(1)
         except Exception as e:
             print(f"Error displaying frame: {e}")
 
@@ -288,7 +290,7 @@ class GoldenRetriever:
                                     if DEBUG:
                                         success = mock_run_policy(max_runtime_s=15)
                                     else:
-                                        success = self.policy.run(max_runtime_s=15)
+                                        success = self.policy.run(max_runtime_s=20)
 
                                     if success:
                                         self.conversation_history.append(

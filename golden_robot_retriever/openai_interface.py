@@ -161,8 +161,8 @@ def text_to_goal_object_or_none(client, text):
 
     response = client.responses.create(
         # model="gpt-4.1",
-        model="gpt-4.1-nano",
-        instructions="You are an assistant that condenses user input to single objects. From the user, you get a sentence of what he desires. You answer in a single word (or multiple if the object the user wants is e.g. a coca cola can), which is the object that the user wants. Example: If the user says, 'I want chips', your answer is 'chips'. Your only answer is a single object. It is also possible that there is noting that the user wants at this moment, then return None.",
+        model="gpt-4.1-mini",
+        instructions="You are an assistant that condenses user input to single object with descriptive adjectives. From the user, you get a sentence of what he desires. You answer in a single word (or multiple if the object the user wants is e.g. a coca cola can, or requires adjectives to best describe it), which is the object that the user wants. Example: If the user says, 'I want chips', your answer is 'chips'. Your only answer is a single object. It is also possible that there is noting that the user wants at this moment, then return None.",
         input=text,
     )
 
@@ -222,9 +222,9 @@ def record_and_extract_bool(client, question_we_asked):
 
 def check_if_user_object_is_visible_in_image(client, user_object, img):
     # Getting the Base64 string
-    # retval, buffer = cv2.imencode(".jpg", img)
+    retval, buffer = cv2.imencode(".jpg", img)
     # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale (8-bit)
-    _, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    # _, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
 
     base64_image = base64.b64encode(buffer).decode("utf-8")
 
@@ -251,7 +251,7 @@ def check_if_user_object_is_visible_in_image(client, user_object, img):
                 "content": [
                     {
                         "type": "input_text",
-                        "text": f"Is the object {user_object} in the image? Yes or no only, please.",
+                        "text": f"Is the object {user_object} in the image and close to us so that we can reach it with a short robot arm? Yes or no only, please.",
                     },
                     {
                         "type": "input_image",

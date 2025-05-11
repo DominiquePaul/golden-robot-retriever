@@ -11,7 +11,8 @@ import numpy as np
 def get_camera(camera_type: t.Literal["webcam", "realsense"]):
     """Get a camera instance based on the camera type."""
     if camera_type == "webcam":
-        return WebcamCamera()
+        # Use the front camera by default
+        return WebcamCamera(1)
     elif camera_type == "realsense":
         return RealSenseCamera()
     else:

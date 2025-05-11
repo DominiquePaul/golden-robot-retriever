@@ -19,6 +19,13 @@ class GraspingPolicy:
     def run(self, max_runtime_s=15):
         start_time = time.time()
 
+        # Initialize robot state
+        httpx.post(
+                f"{self.PHOSPHOBOT_API_URL}/joints/write",
+                json={"angles": [0,-1.57,1.57,-2,0,0]},
+        )
+        time.sleep(1)
+
         while True:
             # Get current robot state
             state = httpx.post(f"{self.PHOSPHOBOT_API_URL}/joints/read").json()
