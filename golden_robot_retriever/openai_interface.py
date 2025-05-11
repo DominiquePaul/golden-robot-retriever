@@ -24,7 +24,7 @@ def convert_text_to_personality(client, text, context):
     )
     base_prompt += str(context)
 
-    prompt = f"Please rephrase the question '{text}' to better fit with your personality described above. Only answer with the rephrased text."
+    prompt = f"Please rephrase the question '{text}' to better fit with your personality described above. Only answer with the rephrased text. Make it sound natural"
 
     # client = openai.OpenAI()
     response = client.responses.create(
@@ -251,7 +251,8 @@ def check_if_user_object_is_visible_in_image(client, user_object, img):
                 "content": [
                     {
                         "type": "input_text",
-                        "text": f"Is the object {user_object} in the image and close to us so that we can reach it with a short robot arm? Yes or no only, please.",
+                        # "text": f"Is the object {user_object} in the image and close to us so that we can reach it with a short robot arm? Yes or no only, please.",
+                        "text": f"Is the object {user_object} in the image and close to us so that we can reach it with a short robot arm? Answer with 'yes' if you can see the object, tell us what object (if any) you currently see if you can not see the image. Summarizing: 'Yes' or '[object that you see]' only please",
                     },
                     {
                         "type": "input_image",
@@ -266,9 +267,9 @@ def check_if_user_object_is_visible_in_image(client, user_object, img):
     print(response.output_text)
 
     if "yes" in response.output_text or "Yes" in response.output_text:
-        return True
+        return True, None
 
-    return False
+    return False, response.output_text
 
 
 if __name__ == "__main__":

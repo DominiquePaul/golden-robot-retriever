@@ -26,9 +26,12 @@ space_pressed = False
 latest_frame = None
 frame_lock = threading.Lock()
 
-DEBUG = False
+DEBUG_SPEECH = False
+DEBUG_POLICY = False
 
-if not DEBUG:
+DISPLAY_IMG = False
+
+if not DEBUG_POLICY:
     from golden_robot_retriever.robot_code.client import GraspingPolicy
 
 
@@ -66,8 +69,9 @@ def display_frames(camera, stop_event):
             # plt.axis('off')
             # plt.draw()
             # plt.pause(0.001)
-            # cv2.imshow("Camera Feed", display_frame)
-            # cv2.waitKey(1)
+            if DISPLAY_IMG:
+                cv2.imshow("Camera Feed", display_frame)
+                cv2.waitKey(1)
         except Exception as e:
             print(f"Error displaying frame: {e}")
 
@@ -102,9 +106,11 @@ def we_grabbed_stuff(client, context):
     return text_to_personality_speech(client, text, context)
 
 
-def tell_that_we_cant_see_obj_yet(client, context, obj):
+def tell_that_we_cant_see_obj_yet(client, context, obj, obj_that_we_can_see):
     """Inform the user that the requested object hasn't been found yet."""
-    text = f"We did not yet find {obj}, we'll keep looking."
+    text = (
+        f"We did not yet find {obj} we only found {obj_that_we_can_see}"
+    )
     return text_to_personality_speech(client, text, context)
 
 
@@ -134,7 +140,7 @@ class GoldenRetriever:
         self.last_asking_time = 0
         self.asking_delta_in_s = 5
 
-        if not DEBUG:
+        if not DEBUG_POLICY:
             self.policy = GraspingPolicy()
 
         try:
@@ -215,7 +221,7 @@ class GoldenRetriever:
                     self.ask_user_for_desire()
 
                 if self.user_desire is None:
-                    if DEBUG:
+                    if DEBUG_SPEECH:
                         user_speech = "One Coca cola please."
                         self.user_desire = "Coca cola"
                     else:
@@ -252,14 +258,19 @@ class GoldenRetriever:
 
                     if frame_copy is not None:
                         downscaled_img = cv2.resize(frame_copy, (0, 0), fx=0.5, fy=0.5)
-                        obj_visible = check_if_user_object_is_visible_in_image(
-                            self.client, self.user_desire, downscaled_img
+                        obj_visible, what_we_see = (
+                            check_if_user_object_is_visible_in_image(
+                                self.client, self.user_desire, downscaled_img
+                            )
                         )
                         print(obj_visible)
 
                         if not obj_visible:
                             tell_that_we_cant_see_obj_yet(
-                                self.client, self.conversation_history, self.user_desire
+                                self.client,
+                                self.conversation_history,
+                                self.user_desire,
+                                what_we_see,
                             )
 
                         else:
@@ -287,7 +298,7 @@ class GoldenRetriever:
                                 success = False
 
                                 while not success:
-                                    if DEBUG:
+                                    if DEBUG_POLICY:
                                         success = mock_run_policy(max_runtime_s=15)
                                     else:
                                         success = self.policy.run(max_runtime_s=20)
@@ -352,7 +363,7 @@ class GoldenRetriever:
                                             frame_copy, (0, 0), fx=0.5, fy=0.5
                                         )
 
-                                        should_drop = (
+                                        should_drop, _ = (
                                             check_if_user_object_is_visible_in_image(
                                                 self.client, "open hand", downscaled
                                             )
@@ -366,7 +377,6 @@ class GoldenRetriever:
                                 )
 
                                 self.user_desire = None
-
 
                 # other things
                 time.sleep(0.05)
