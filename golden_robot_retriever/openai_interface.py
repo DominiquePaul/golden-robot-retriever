@@ -10,31 +10,16 @@ import sounddevice as sd
 import webrtcvad
 from scipy.io.wavfile import write
 
-os.environ["QT_QPA_PLATFORM"] = "xcb"  # or "wayland"
-import datetime
 
+import platform
+if platform.system() != "Darwin":  # Skip if on macOS
+    os.environ["QT_QPA_PLATFORM"] = "xcb"  # or "wayland"
+
+import datetime
 import cv2
 
-
-
-def convert_text_to_personality(client, text, context):
-    base_prompt = (
-        "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
-      The previous part of the conversation is this: "
-    )
-    base_prompt += str(context)
-
-    prompt = f"Please rephrase the question '{text}' to better fit with your personality described above. Only answer with the rephrased text."
-
-    # client = openai.OpenAI()
-    response = client.responses.create(
-        model="gpt-4.1-nano",
-        instructions=prompt,
-        input=text,
-    )
-
-    print(response.output_text)
-    return response.output_text
+# Define a common system prompt
+SYSTEM_PROMPT = "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence."
 
 
 def text_to_speech(client, input_text, prev_conversation=[]):
@@ -43,15 +28,10 @@ def text_to_speech(client, input_text, prev_conversation=[]):
     # client = openai.OpenAI()
     speech_file_path = Path(__file__).parent / f"robot_answers/{timestamp}_speech.mp3"
 
-    base_prompt = (
-        "You are a classic British butler. You speak with a formal, articulate, and respectful manner, using a refined British accent. Always maintain a composed and dignified presence.\
-      The previous part of the conversation is this: "
-    )
-    base_prompt += str(prev_conversation)
-
+    # Direct speech instructions without asking for rephrasing
     speech_instructions = (
-        base_prompt
-        + "Choose your mood according to the previous conversation. You can choose from cheerful, angry (for example if the user annoys you by always saying no), nice if the rest of the conversation seems nice, sassy, or maybe even sarcastic."
+        f"{SYSTEM_PROMPT}\n"
+        "Choose your mood according to the context. You can choose from cheerful, angry (for example if the user annoys you), nice, sassy, or sarcastic."
     )
 
     os.makedirs("robot_answers", exist_ok=True)
@@ -68,8 +48,6 @@ def text_to_speech(client, input_text, prev_conversation=[]):
 
 
 def speech_to_text(client):
-    # client = openai.OpenAI()
-
     # Record audio from mic
     duration = 5  # seconds
     samplerate = 44100
@@ -174,22 +152,6 @@ def text_to_goal_object_or_none(client, text):
     return response.output_text
 
 
-def extract_what_the_user_wants_from_voice(client):
-    user_text = speech_to_text_until_silence(client)
-
-    if user_text is None:
-        print("Did not record anything")
-        return None, None
-
-    user_object = text_to_goal_object_or_none(client, user_text)
-
-    print(f"The user wants: {user_object}")
-
-    if user_object is None:
-        return user_text, None
-
-    return user_text, user_object
-
 
 def text_to_yes_no(client, question, answer):
     # client = openai.OpenAI()
@@ -214,61 +176,142 @@ def record_and_extract_bool(client, question_we_asked):
     if user_text is None:
         return None, None
 
-    test, res = text_to_yes_no(client, question_we_asked, user_text)
+    _, res = text_to_yes_no(client, question_we_asked, user_text)
     print(res)
 
     return user_text, res
 
 
-def check_if_user_object_is_visible_in_image(client, user_object, img):
-    # Getting the Base64 string
-    # retval, buffer = cv2.imencode(".jpg", img)
-    # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale (8-bit)
-    _, buffer = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+class OpenAIInterface:
+    def __init__(self, client=None):
+        """Initialize the OpenAI interface with a client and empty conversation history."""
+        import openai
+        self.client = client if client is not None else openai.OpenAI()
+        self.conversation_history = []
+        self.system_prompt = SYSTEM_PROMPT
 
-    base64_image = base64.b64encode(buffer).decode("utf-8")
+    def add_to_history(self, role, content):
+        """Add a message to the conversation history."""
+        self.conversation_history.append({"role": role, "content": content})
+    
+    def get_speech_instructions(self):
+        """Get extended instructions for speech synthesis."""
+        return f"{self.system_prompt}\nChoose your mood according to the previous conversation. You can choose from cheerful, angry (for example if the user annoys you by always saying no), nice if the rest of the conversation seems nice, sassy, or maybe even sarcastic."
+    
+    def generate_response(self, text):
+        """Generate a response from the AI based on the system prompt."""
+        response = self.client.chat.completions.create(
+            model="gpt-4.1-nano",
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                *self.conversation_history,
+                {"role": "user", "content": text}
+            ]
+        )
+        
+        response_text = response.choices[0].message.content
+        print(response_text)
+        return response_text
 
-    # Generate timestamped filename
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    def text_to_speech(self, text):
+        """Convert text to speech and return the path to the audio file."""
+        import datetime
+        from pathlib import Path
+        import os
+        
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        speech_file_path = Path(__file__).parent / f"robot_answers/{timestamp}_speech.mp3"
+        
+        os.makedirs("robot_answers", exist_ok=True)
+        
+        with self.client.audio.speech.with_streaming_response.create(
+            model="gpt-4o-mini-tts",
+            voice="verse",
+            input=text,
+            instructions=self.get_speech_instructions(),
+        ) as response:
+            response.stream_to_file(speech_file_path)
+        
+        return speech_file_path
+    
+    def extract_what_the_user_wants_from_voice(self):
+        """Record and extract what the user wants."""
+        user_text = speech_to_text_until_silence(self.client)
 
-    # Save binary JPEG
-    os.makedirs("imgs", exist_ok=True)
-    with open(f"imgs/image_{timestamp}.jpg", "wb") as f:
-        f.write(buffer)
+        if user_text is None:
+            print("Did not record anything")
+            return None, None
 
-    # Write to file
-    with open(f"imgs/image_{timestamp}.txt", "w") as f:
-        f.write(base64_image)
+        user_object = text_to_goal_object_or_none(self.client, user_text)
 
-    # client = openai.OpenAI()
-    response = client.responses.create(
-        # model="o4-mini",
-        model="gpt-4.1",
-        # model="gpt-4.1-nano",
-        input=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Is the object {user_object} in the image? Yes or no only, please.",
-                    },
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:image/jpeg;base64,{base64_image}",
-                        "detail": "low",
-                    },
-                ],
-            }
-        ],
-    )
+        print(f"The user wants: {user_object}")
 
-    print(response.output_text)
+        if user_object is None:
+            return user_text, None
 
-    if "yes" in response.output_text or "Yes" in response.output_text:
-        return True
+        return user_text, user_object
+    
+    def record_and_extract_bool(self, question):
+        """Record audio and extract boolean answer."""
+        return record_and_extract_bool(self.client, question)
+    
+    def check_if_user_object_is_visible_in_image(self, object_name, image):
+        """Check if the specified object is visible in the image."""
+         # Getting the Base64 string
+        # retval, buffer = cv2.imencode(".jpg", img)
+        # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # Convert to grayscale (8-bit)
+        _, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
 
-    return False
+        base64_image = base64.b64encode(buffer).decode("utf-8")
+
+        # Generate timestamped filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Save binary JPEG
+        os.makedirs("imgs", exist_ok=True)
+        with open(f"imgs/image_{timestamp}.jpg", "wb") as f:
+            f.write(buffer)
+
+        # Write to file
+        with open(f"imgs/image_{timestamp}.txt", "w") as f:
+            f.write(base64_image)
+
+        response = self.client.responses.create(
+            model="gpt-4.1",
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": f"Is the object {object_name} in the image? Yes or no only, please.",
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": f"data:image/jpeg;base64,{base64_image}",
+                            "detail": "low",
+                        },
+                    ],
+                }
+            ],
+        )
+
+        print(response.output_text)
+
+        if "yes" in response.output_text or "Yes" in response.output_text:
+            return True
+
+        return False
+    
+    def speak_with_personality(self, text):
+        """Generate a response in the butler personality, convert to speech, and add to history."""
+        # No need to convert text to personality - just use it directly in butler personality
+        speech_path = self.text_to_speech(text)
+        import os
+        os.system(f"mpg123 '{speech_path}'")
+        self.conversation_history.append({"role": "assistant", "content": text})
+        return text
+    
 
 
 if __name__ == "__main__":
@@ -277,8 +320,3 @@ if __name__ == "__main__":
     os.system(
         f"mpg123 {speech_path}"
     )  # uses mpg123 to play mp3 (ensure it's installed)
-
-    # speech_to_text()
-    # speech_to_text_until_silence()
-
-    # user_command, user_object = extract_what_the_user_wants_from_voice()

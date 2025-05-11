@@ -1,5 +1,3 @@
-# import matplotlib.pyplot as plt
-import os
 import threading
 import time
 
@@ -12,13 +10,7 @@ import matplotlib.pyplot as plt
 
 load_dotenv()
 
-from golden_robot_retriever.openai_interface import (
-    convert_text_to_personality,
-    text_to_speech,
-    extract_what_the_user_wants_from_voice,
-    record_and_extract_bool,
-    check_if_user_object_is_visible_in_image,
-)
+from golden_robot_retriever.openai_interface import OpenAIInterface
 from golden_robot_retriever.cameras import get_camera
 
 space_pressed = False
@@ -72,52 +64,6 @@ def display_frames(camera, stop_event):
         time.sleep(0.05)
 
 
-def text_to_personality_speech(client, text, context):
-    """Convert text to speech matching the golden retriever personality and play it."""
-    new_text = convert_text_to_personality(client, text, context)
-
-    speech_path = text_to_speech(client, new_text, context)
-    os.system(f"mpg123 '{speech_path}'")
-
-    return new_text
-
-
-def ask_what_the_user_wants(client, context):
-    """Ask the user how the robot can help them."""
-    text = "How can I help you?"
-    return text_to_personality_speech(client, text, context)
-
-
-def ask_if_this_is_what_we_want(client, context, obj):
-    """Ask the user if the detected object is what they requested."""
-    text = f"I found the {obj}! Shall I get it?"
-    return text_to_personality_speech(client, text, context)
-
-
-def we_grabbed_stuff(client, context):
-    """Inform the user that the object was grasped successfully."""
-    text = "Ok, we grasped the object, bringing it to you now."
-    return text_to_personality_speech(client, text, context)
-
-
-def tell_that_we_cant_see_obj_yet(client, context, obj):
-    """Inform the user that the requested object hasn't been found yet."""
-    text = f"We did not yet find {obj}, we'll keep looking."
-    return text_to_personality_speech(client, text, context)
-
-
-def should_try_again(client, context):
-    """Ask the user if another attempt should be made."""
-    text = "Should we try this again?"
-    return text_to_personality_speech(client, text, context)
-
-
-def please_take_the_object(client, context, obj):
-    """Tell the user that he should take the object."""
-    text = f"Here's your {obj}"
-    return text_to_personality_speech(client, text, context)
-
-
 def mock_run_policy(max_runtime_s=15):
     """Execute the robot's grasping policy and return success status."""
     print("Attempting to execute policy")
@@ -126,7 +72,8 @@ def mock_run_policy(max_runtime_s=15):
 
 class GoldenRetriever:
     def __init__(self):
-        self.client = openai.OpenAI()
+        client = openai.OpenAI()
+        self.ai = OpenAIInterface(client)
         self.last_img_checking_time = time.time()
         self.img_check_delta_in_s = 0.5
         self.last_asking_time = 0
@@ -138,7 +85,6 @@ class GoldenRetriever:
         try:
             self.camera = get_camera("webcam")
             self.user_desire = None
-            self.conversation_history = []
             self.stop_event = threading.Event()
             self.display_thread = threading.Thread(
                 target=display_frames, args=(self.camera, self.stop_event), daemon=True
@@ -151,7 +97,6 @@ class GoldenRetriever:
             self.stop_event = threading.Event()
             self.display_thread = None
             self.user_desire = None
-            self.conversation_history = []
 
     def __del__(self):
         """Clean up resources when the object is destroyed."""
@@ -193,8 +138,7 @@ class GoldenRetriever:
 
     def ask_user_for_desire(self):
         self.last_asking_time = time.time()
-        text = ask_what_the_user_wants(self.client, self.conversation_history)
-        self.conversation_history.append({"role": "assistant", "content": text})
+        self.ai.speak_with_personality("How can I help you?")
 
     def run(self):
         """Main function orchestrating the retrieval robot's behavior loop."""
@@ -216,15 +160,12 @@ class GoldenRetriever:
                     if DEBUG:
                         user_speech = "One Coca cola please."
                         self.user_desire = "Coca cola"
+                        self.ai.add_to_history("user", user_speech)
                     else:
-                        user_speech, self.user_desire = (
-                            extract_what_the_user_wants_from_voice(self.client)
-                        )
+                        user_speech, self.user_desire = self.ai.extract_what_the_user_wants_from_voice()
 
                     if user_speech is None and self.user_desire is None:
-                        self.conversation_history.append(
-                            {"role": "user", "content": "User did not answer."}
-                        )
+                        self.ai.add_to_history("user", "User did not answer.")
                         continue
 
                     elif self.user_desire is None:
@@ -233,12 +174,12 @@ class GoldenRetriever:
                     print(
                         text2art(self.user_desire)
                     )  # print ascii art of desired object for extra prominence in console.
-                    self.conversation_history.append(
-                        {"role": "user", "content": user_speech}
-                    )
+                    
+                    # Only add to history if not already added (for non-DEBUG mode)
+                    if not DEBUG:
+                        self.ai.add_to_history("user", user_speech)
 
                 # check if we see the object of desire at the moment
-
                 if self.user_desire is not None and self.time_to_evaluate_image_again:
                     print("loop")
                     with frame_lock:
@@ -250,35 +191,23 @@ class GoldenRetriever:
 
                     if frame_copy is not None:
                         downscaled_img = cv2.resize(frame_copy, (0, 0), fx=0.5, fy=0.5)
-                        obj_visible = check_if_user_object_is_visible_in_image(
-                            self.client, self.user_desire, downscaled_img
+                        obj_visible = self.ai.check_if_user_object_is_visible_in_image(
+                            self.user_desire, downscaled_img
                         )
                         print(obj_visible)
 
                         if not obj_visible:
-                            tell_that_we_cant_see_obj_yet(
-                                self.client, self.conversation_history, self.user_desire
-                            )
-
+                            self.ai.speak_with_personality(f"We did not yet find {self.user_desire}, we'll keep looking.")
                         else:
                             # ask if we should bring the object
-                            question = ask_if_this_is_what_we_want(
-                                self.client, self.conversation_history, self.user_desire
-                            )
-                            self.conversation_history.append(
-                                {"role": "assistant", "content": question}
-                            )
+                            question = self.ai.speak_with_personality(f"I found the {self.user_desire}! Shall I get it?")
 
-                            user_answer, should_grasp = record_and_extract_bool(
-                                self.client, question
-                            )
+                            user_answer, should_grasp = self.ai.record_and_extract_bool(question)
                             if user_answer is None and should_grasp is None:
                                 should_grasp = False
                                 user_answer = "User did not say anything"
 
-                            self.conversation_history.append(
-                                {"role": "user", "content": user_answer}
-                            )
+                            self.ai.add_to_history("user", user_answer)
 
                             # execute policy
                             if should_grasp:
@@ -291,47 +220,25 @@ class GoldenRetriever:
                                         success = self.policy.run(max_runtime_s=15)
 
                                     if success:
-                                        self.conversation_history.append(
-                                            {
-                                                "role": "user",
-                                                "content": "We successfully solved this problem. On to the next one!",
-                                            }
+                                        self.ai.add_to_history(
+                                            "user",
+                                            "We successfully solved this problem. On to the next one!"
                                         )
                                     else:
-                                        assistant_query = should_try_again(
-                                            self.client, self.conversation_history
-                                        )
-                                        self.conversation_history.append(
-                                            {
-                                                "role": "assistant",
-                                                "content": assistant_query,
-                                            }
-                                        )
-                                        user_answer, try_again = (
-                                            record_and_extract_bool(
-                                                self.client, assistant_query
-                                            )
+                                        assistant_query = self.ai.speak_with_personality("Should we try this again?")
+                                        user_answer, try_again = self.ai.record_and_extract_bool(
+                                            assistant_query
                                         )
 
                                         if not try_again:
-                                            self.conversation_history.append(
-                                                {
-                                                    "role": "user",
-                                                    "content": "We were unfortunately not able to solve this problem. Let's check if we can do something else!",
-                                                }
+                                            self.ai.add_to_history(
+                                                "user",
+                                                "We were unfortunately not able to solve this problem. Let's check if we can do something else!"
                                             )
                                             break
 
                                 # tell user that we grasped the obj
-                                text = we_grabbed_stuff(
-                                    self.client, self.conversation_history
-                                )
-                                self.conversation_history.append(
-                                    {
-                                        "role": "assistant",
-                                        "content": text,
-                                    }
-                                )
+                                self.ai.speak_with_personality("Ok, we grasped the object, bringing it to you now.")
 
                                 should_drop = False
                                 # drop the stuff when back at the persons place
@@ -350,21 +257,13 @@ class GoldenRetriever:
                                             frame_copy, (0, 0), fx=0.5, fy=0.5
                                         )
 
-                                        should_drop = (
-                                            check_if_user_object_is_visible_in_image(
-                                                self.client, "open hand", downscaled
-                                            )
+                                        should_drop = self.ai.check_if_user_object_is_visible_in_image(
+                                            "open hand", downscaled
                                         )
                                     time.sleep(4)
 
-                                please_take_the_object(
-                                    self.client,
-                                    self.conversation_history,
-                                    self.user_desire,
-                                )
-
+                                self.ai.speak_with_personality(f"Here's your {self.user_desire}")
                                 self.user_desire = None
-
 
                 # other things
                 time.sleep(0.05)
