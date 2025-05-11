@@ -15,15 +15,6 @@ import datetime
 
 import cv2
 
-# class LLMConvo:
-#     def __init__(self):
-#         self.client = client
-#         self.conversation_history = []
-#         self.system_prompt = system_prompt
-#         self.client = 
-
-#     def add_message(self, message):
-#         self.conversation_history.append(message)
 
 
 def convert_text_to_personality(client, text, context):
