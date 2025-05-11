@@ -1,5 +1,10 @@
 # Golden robot retriever:
 
+Watch the demo:
+
+[![Golden Robot Retriever Demo](https://img.youtube.com/vi/6dvA0egj8LI/0.jpg)](https://youtu.be/6dvA0egj8LI)
+
+
 ### Data
 
 We collected three datasets: 
